@@ -1,0 +1,96 @@
+// ZPlayer — Artist Detail Page
+import { icons } from "../core/icons.js";
+import { library } from "../core/library.js";
+import { queueManager } from "../core/queue.js";
+import { router } from "../router.js";
+import { createElement } from "../core/utils.js";
+import { renderTrackList } from "../components/trackList.js";
+
+export function renderArtist(container, params) {
+  container.innerHTML = "";
+  const artist = library.getArtistById(params.id);
+  if (!artist) {
+    container.innerHTML =
+      '<div class="page"><div class="empty-state"><div class="empty-state-title">Artist not found</div></div></div>';
+    return;
+  }
+
+  const tracks = library.getTracksByArtist(artist.id);
+  const albums = library.getAlbumsByArtist(artist.id);
+  const page = createElement("div", "page");
+
+  page.innerHTML = `
+    <div class="page-header" style="flex-direction: column; align-items: center; text-align: center;">
+      <div class="page-header-bg"></div>
+      <img class="page-header-art" src="${artist.image}" alt="${artist.name}" style="border-radius: 50%;">
+      <div class="page-header-info" style="text-align: center;">
+        <div class="page-header-type">Artist</div>
+        <h1 class="page-header-title">${artist.name}</h1>
+        <div class="page-header-meta" style="justify-content: center;">
+          <span>${artist.genre}</span>
+          <span class="page-header-dot"></span>
+          <span>${tracks.length} songs</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="action-bar">
+      <button class="action-btn-play" id="play-artist">${icons.play}</button>
+      <button class="action-btn" id="shuffle-artist">${icons.shuffle}</button>
+    </div>
+
+    <div id="artist-popular"></div>
+    <div id="artist-albums" style="margin-top: var(--sp-8);"></div>
+  `;
+
+  container.appendChild(page);
+
+  // Play all
+  page.querySelector("#play-artist").addEventListener("click", () => {
+    queueManager.playAll(tracks, 0);
+    library.addToRecent(tracks[0].id);
+  });
+
+  // Shuffle
+  page.querySelector("#shuffle-artist").addEventListener("click", () => {
+    queueManager.playAll(tracks, 0);
+    queueManager.toggleShuffle();
+  });
+
+  // Popular tracks section
+  const popularSection = page.querySelector("#artist-popular");
+  popularSection.innerHTML =
+    '<h3 class="section-title" style="margin-bottom: var(--sp-4);">Popular</h3>';
+  const trackContainer = createElement("div", "");
+  renderTrackList(tracks, trackContainer);
+  popularSection.appendChild(trackContainer);
+
+  // Albums section
+  if (albums.length > 0) {
+    const albumSection = page.querySelector("#artist-albums");
+    albumSection.innerHTML =
+      '<h3 class="section-title" style="margin-bottom: var(--sp-4);">Albums</h3>';
+    const grid = createElement("div", "cards-grid");
+    albums.forEach((album) => {
+      const card = createElement("div", "card");
+      card.innerHTML = `
+        <div style="position: relative;">
+          <img class="card-art" src="${album.cover}" alt="${album.title}" loading="lazy">
+          <button class="card-play-btn">${icons.play}</button>
+        </div>
+        <div class="card-title">${album.title}</div>
+        <div class="card-subtitle">${album.year}</div>
+      `;
+      card.querySelector(".card-play-btn").addEventListener("click", (e) => {
+        e.stopPropagation();
+        const albumTracks = library.getTracksByAlbum(album.id);
+        queueManager.playAll(albumTracks, 0);
+      });
+      card.addEventListener("click", () =>
+        router.navigate(`#/album/${album.id}`),
+      );
+      grid.appendChild(card);
+    });
+    albumSection.appendChild(grid);
+  }
+}
