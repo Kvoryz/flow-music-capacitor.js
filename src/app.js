@@ -4,7 +4,7 @@ import { StatusBar, Style } from "@capacitor/status-bar";
 import { icons } from "./core/icons.js";
 import { router } from "./router.js";
 import { store } from "./core/store.js";
-import { library } from "./core/library.js";
+import { musicLibrary } from "./core/library.js";
 import { audioEngine } from "./core/audioEngine.js";
 import { queueManager } from "./core/queue.js";
 import { createElement } from "./core/utils.js";
@@ -18,29 +18,93 @@ import { createToast } from "./components/toast.js";
 
 // Pages
 import { renderHome } from "./pages/home.js";
-import { renderSearch } from "./pages/search.js";
+import { renderDiscovery } from "./pages/discovery.js";
 import { renderLibrary } from "./pages/library.js";
 import { renderAlbum } from "./pages/album.js";
 import { renderArtist } from "./pages/artist.js";
 import { renderPlaylist } from "./pages/playlist.js";
 import { renderQueue } from "./pages/queue.js";
 
-export async function initApp() {
-  // Initialize Native UI
-  if (Capacitor.isNativePlatform()) {
-    try {
-      await StatusBar.setOverlaysWebView({ overlay: true });
-      await StatusBar.setStyle({ style: Style.Light });
-      await StatusBar.setBackgroundColor({ color: "#000000" });
-    } catch (e) {
-      console.warn("StatusBar init failed", e);
-    }
+// Helper Functions (defined before init)
+function updateActiveNav(view) {
+  let navKey = "home";
+  if (view.startsWith("#/discovery")) navKey = "discovery";
+  else if (
+    view.startsWith("#/library") ||
+    view.startsWith("#/album") ||
+    view.startsWith("#/artist") ||
+    view.startsWith("#/playlist")
+  )
+    navKey = "library";
+  else if (view.startsWith("#/queue")) navKey = "queue";
+
+  document.querySelectorAll(".sidebar-nav-item").forEach((item) => {
+    item.classList.toggle("active", item.dataset.nav === navKey);
+  });
+
+  document.querySelectorAll(".bottom-nav-item").forEach((item) => {
+    item.classList.toggle("active", item.dataset.nav === navKey);
+  });
+}
+
+function updateSidebarPlaylists(musicLibrary) {
+  const container = document.getElementById("sidebar-playlists");
+  if (!container || !musicLibrary) return;
+
+  const playlists = musicLibrary.getPlaylists();
+  const favCount = musicLibrary.getFavoriteTracks().length;
+
+  container.innerHTML = "";
+
+  if (favCount > 0) {
+    const likedItem = createElement("div", "sidebar-playlist-item");
+    likedItem.innerHTML = `
+      <div class="sidebar-playlist-thumb" style="background: linear-gradient(135deg, #450af5, #c4efd9); display: flex; align-items: center; justify-content: center;">
+        ${icons.heartFill}
+      </div>
+      <div class="sidebar-playlist-info">
+        <div class="sidebar-playlist-name">Liked Songs</div>
+        <div class="sidebar-playlist-meta">${favCount} songs</div>
+      </div>
+    `;
+    likedItem.addEventListener("click", () => {
+      router.navigate("#/library");
+      setTimeout(() => {
+        const likedTab = document.querySelector('[data-tab="liked"]');
+        if (likedTab) likedTab.click();
+      }, 100);
+    });
+    container.appendChild(likedItem);
   }
 
+  playlists.forEach((pl) => {
+    const tracks = musicLibrary.getPlaylistTracks(pl.id);
+    const item = createElement("div", "sidebar-playlist-item");
+    item.innerHTML = `
+      <img class="sidebar-playlist-thumb" src="${pl.cover || (tracks[0] ? tracks[0].cover : "") || ""}" alt="">
+      <div class="sidebar-playlist-info">
+        <div class="sidebar-playlist-name">${pl.name}</div>
+        <div class="sidebar-playlist-meta">Playlist • ${tracks.length} songs</div>
+      </div>
+    `;
+    item.addEventListener("click", () =>
+      router.navigate(`#/playlist/${pl.id}`),
+    );
+    container.appendChild(item);
+  });
+}
+
+export async function initApp() {
   const appEl = document.getElementById("app");
+  if (!appEl) return;
   appEl.innerHTML = "";
 
-  // Build app shell
+  // Use the renamed import
+  if (!musicLibrary) {
+    throw new Error("Critical: Music Library core failed to load.");
+  }
+
+  // 1. Build app shell IMMEDIATELY (no awaits before this)
   appEl.innerHTML = `
     <div class="app-body">
       <nav class="sidebar" id="sidebar">
@@ -53,9 +117,9 @@ export async function initApp() {
             ${icons.homeFill}
             <span>Home</span>
           </a>
-          <a class="sidebar-nav-item" data-route="#/search" data-nav="search">
-            ${icons.search}
-            <span>Search</span>
+          <a class="sidebar-nav-item" data-route="#/discovery" data-nav="discovery">
+            ${icons.sparkles}
+            <span>Discovery</span>
           </a>
           <a class="sidebar-nav-item" data-route="#/library" data-nav="library">
             ${icons.library}
@@ -76,10 +140,28 @@ export async function initApp() {
     </div>
   `;
 
-  // Mini player
-  app.appendChild(createMiniPlayer());
+  // 2. Initialize Native UI (Non-blocking)
+  if (Capacitor.isNativePlatform()) {
+    StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
+    StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
+    StatusBar.setBackgroundColor({ color: "#000000" }).catch(() => {});
 
-  // Bottom nav (mobile)
+    // Request notification permission for Android 13+
+    if (Capacitor.getPlatform() === "android") {
+      try {
+        const NowPlaying = (await import("@capacitor/core")).registerPlugin(
+          "NowPlaying",
+        );
+        NowPlaying.requestPermissions().catch(() => {});
+      } catch (e) {
+        // Plugin not available, ignore
+      }
+    }
+  }
+
+  // 3. Mount core components
+  appEl.appendChild(createMiniPlayer());
+
   const bottomNav = createElement("nav", "bottom-nav");
   bottomNav.innerHTML = `
     <div class="bottom-nav-items">
@@ -87,9 +169,9 @@ export async function initApp() {
         ${icons.homeFill}
         <span>Home</span>
       </button>
-      <button class="bottom-nav-item" data-route="#/search" data-nav="search">
-        ${icons.search}
-        <span>Search</span>
+      <button class="bottom-nav-item" data-route="#/discovery" data-nav="discovery">
+        ${icons.sparkles}
+        <span>Discovery</span>
       </button>
       <button class="bottom-nav-item" data-route="#/library" data-nav="library">
         ${icons.library}
@@ -97,39 +179,50 @@ export async function initApp() {
       </button>
     </div>
   `;
-  app.appendChild(bottomNav);
+  appEl.appendChild(bottomNav);
 
   // Overlays
-  app.appendChild(createNowPlaying());
-  app.appendChild(createContextMenu());
-  app.appendChild(createModal());
-  app.appendChild(createToast());
+  appEl.appendChild(createNowPlaying());
+  appEl.appendChild(createContextMenu());
+  appEl.appendChild(createModal());
+  appEl.appendChild(createToast());
 
-  // Setup sidebar nav click
-  const sidebarNav = document.getElementById("sidebar-nav");
-  const mainContent = document.getElementById("main-content");
+  // Equalizer panel (hidden by default)
+  import("./components/equalizer.js").then(({ createEqualizer }) => {
+    const eqPanel = createEqualizer();
+    appEl.appendChild(eqPanel);
 
-  document.querySelectorAll("[data-route]").forEach((item) => {
+    store.on("eqOpen", (open) => {
+      eqPanel.classList.toggle("open", open);
+      if (open && audioEngine.audioCtx) {
+        audioEngine.audioCtx.resume().catch(() => {});
+      }
+    });
+  });
+
+  // 4. Setup listeners via appEl scoping
+  const mainContent = appEl.querySelector("#main-content");
+
+  appEl.querySelectorAll("[data-route]").forEach((item) => {
     item.addEventListener("click", (e) => {
       e.preventDefault();
       router.navigate(item.dataset.route);
     });
   });
 
-  // Update active nav on route change
   store.on("currentView", (view) => {
     updateActiveNav(view);
-    updateSidebarPlaylists();
+    updateSidebarPlaylists(musicLibrary);
   });
 
-  // Track changes: update recently played in sidebar
   audioEngine.on("trackchange", ({ track }) => {
-    library.addToRecent(track.id);
+    musicLibrary.addToRecent(track.id);
+    musicLibrary.incrementPlayCount(track.id);
   });
 
-  // Register routes
+  // 5. Register routes
   router.register("#/", () => renderHome(mainContent));
-  router.register("#/search", () => renderSearch(mainContent));
+  router.register("#/discovery", () => renderDiscovery(mainContent));
   router.register("#/library", () => renderLibrary(mainContent));
   router.register("#/album/:id", (params) => renderAlbum(mainContent, params));
   router.register("#/artist/:id", (params) =>
@@ -140,105 +233,29 @@ export async function initApp() {
   );
   router.register("#/queue", () => renderQueue(mainContent));
 
-  // Initialize
-  updateSidebarPlaylists();
-  router.init();
-
-  // Scan local music (Android) — async, non-blocking
-  library.init().then(() => {
-    // Re-render current page after scan completes with new data
-    router._resolve();
-    updateSidebarPlaylists();
-  });
-
-  // Listen for library updates to show toasts
-  library.on("updated", (data) => {
-    if (data.tracks > 0) {
-      showToast(`Found ${data.tracks} songs!`);
-    } else {
-      showToast("No music found on device.");
-    }
-  });
-}
-
-function updateActiveNav(view) {
-  // Determine base nav
-  let navKey = "home";
-  if (view.startsWith("#/search")) navKey = "search";
-  else if (
-    view.startsWith("#/library") ||
-    view.startsWith("#/album") ||
-    view.startsWith("#/artist") ||
-    view.startsWith("#/playlist")
-  )
-    navKey = "library";
-  else if (view.startsWith("#/queue")) navKey = "queue";
-
-  // Update sidebar
-  document.querySelectorAll(".sidebar-nav-item").forEach((item) => {
-    const isActive = item.dataset.nav === navKey;
-    item.classList.toggle("active", isActive);
-    // Swap icons
-    if (item.dataset.nav === "home") {
-      item
-        .querySelector("svg")
-        ?.closest(".sidebar-nav-item")
-        ?.querySelector("svg")?.remove;
-    }
-  });
-
-  // Update bottom nav
-  document.querySelectorAll(".bottom-nav-item").forEach((item) => {
-    item.classList.toggle("active", item.dataset.nav === navKey);
-  });
-}
-
-function updateSidebarPlaylists() {
-  const container = document.getElementById("sidebar-playlists");
-  if (!container) return;
-
-  const playlists = library.getPlaylists();
-  const favCount = library.getFavoriteTracks().length;
-
-  container.innerHTML = "";
-
-  // Liked songs entry
-  if (favCount > 0) {
-    const likedItem = createElement("div", "sidebar-playlist-item");
-    likedItem.innerHTML = `
-      <div class="sidebar-playlist-thumb" style="background: linear-gradient(135deg, #450af5, #c4efd9); display: flex; align-items: center; justify-content: center;">
-        ${icons.heartFill}
-      </div>
-      <div class="sidebar-playlist-info">
-        <div class="sidebar-playlist-name">Liked Songs</div>
-        <div class="sidebar-playlist-meta">${favCount} songs</div>
-      </div>
-    `;
-    likedItem.addEventListener("click", () => {
-      router.navigate("#/library");
-      // Switch to liked tab after navigation
-      setTimeout(() => {
-        const likedTab = document.querySelector('[data-tab="liked"]');
-        if (likedTab) likedTab.click();
-      }, 100);
-    });
-    container.appendChild(likedItem);
+  // 6. Final Kickoff
+  updateSidebarPlaylists(musicLibrary);
+  try {
+    router.init();
+  } catch (err) {
+    console.error("Router init failed", err);
   }
 
-  // Playlists
-  playlists.forEach((pl) => {
-    const tracks = library.getPlaylistTracks(pl.id);
-    const item = createElement("div", "sidebar-playlist-item");
-    item.innerHTML = `
-      <img class="sidebar-playlist-thumb" src="${pl.cover || tracks[0]?.cover || ""}" alt="">
-      <div class="sidebar-playlist-info">
-        <div class="sidebar-playlist-name">${pl.name}</div>
-        <div class="sidebar-playlist-meta">Playlist • ${tracks.length} songs</div>
-      </div>
-    `;
-    item.addEventListener("click", () =>
-      router.navigate(`#/playlist/${pl.id}`),
-    );
-    container.appendChild(item);
+  musicLibrary
+    .init()
+    .then(() => {
+      router._resolve();
+      updateSidebarPlaylists(musicLibrary);
+    })
+    .catch((err) => {
+      console.warn("Library init failed", err);
+    });
+
+  musicLibrary.on("updated", (data) => {
+    if (data && data.tracks > 0) {
+      store.showToast(`Found ${data.tracks} songs!`);
+    } else if (data && data.tracks === 0) {
+      store.showToast("No music found on device.");
+    }
   });
 }

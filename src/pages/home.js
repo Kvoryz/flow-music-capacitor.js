@@ -1,183 +1,164 @@
 // ZPlayer — Home Page
 import { icons } from "../core/icons.js";
-import { library } from "../core/library.js";
+import { musicLibrary } from "../core/library.js";
 import { queueManager } from "../core/queue.js";
-import { createElement } from "../core/utils.js";
+import { createElement, cleanTitle } from "../core/utils.js";
 import { router } from "../router.js";
 
 export function renderHome(container) {
   container.innerHTML = "";
   const page = createElement("div", "page");
+  page.classList.add("hero-gradient");
 
-  // Modern greeting
   const hour = new Date().getHours();
   let greeting = "Good evening";
-  if (hour < 5) greeting = "Good night";
-  else if (hour < 12) greeting = "Good morning";
-  else if (hour < 17) greeting = "Good afternoon";
+  let gradientSub = "rgba(45, 10, 245, 0.15)"; // Evening/Default
 
-  page.innerHTML = `
-    <header class="home-header">
-      <h1 class="greeting-text">${greeting}</h1>
-      <p class="greeting-sub">What's the vibe today?</p>
-    </header>
+  if (hour < 5) {
+    greeting = "Good night";
+    gradientSub = "rgba(10, 10, 30, 0.3)";
+  } else if (hour < 12) {
+    greeting = "Good morning";
+    gradientSub = "rgba(253, 221, 102, 0.1)";
+  } else if (hour < 17) {
+    greeting = "Good afternoon";
+    gradientSub = "rgba(255, 120, 50, 0.1)";
+  }
+
+  const allTracks = musicLibrary.getAllTracks();
+  const recentTracks = musicLibrary.getRecentlyPlayed();
+  const mostPlayed = musicLibrary.getMostPlayed(6);
+  const recentlyAdded = musicLibrary.getRecentlyAdded(8);
+
+  // Home Header / Hero Area
+  const header = createElement("header", "home-header animate-in");
+  header.style.marginBottom = "var(--sp-10)";
+  header.innerHTML = `
+    <div style="margin-bottom: var(--sp-6);">
+      <h1 class="greeting-text" style="font-size: var(--fs-4xl); font-weight: 800; letter-spacing: -0.04em;">${greeting}</h1>
+      <p style="color: var(--text-secondary); margin-top: 4px;">Start your flow session.</p>
+    </div>
   `;
 
-  const allTracks = library.getAllTracks();
-  const recentTracks = library.getRecentlyPlayed();
+  // Feature Glass Card (Highlight)
+  if (allTracks.length > 0) {
+    const highlight = recentTracks[0] || allTracks[0];
+    const heroCard = createElement("div", "glass-card animate-in");
+    heroCard.style.padding = "var(--sp-6)";
+    heroCard.style.borderRadius = "var(--radius-2xl)";
+    heroCard.style.display = "flex";
+    heroCard.style.alignContent = "center";
+    heroCard.style.gap = "var(--sp-6)";
+    heroCard.style.cursor = "pointer";
+    heroCard.style.transition = "transform 0.2s ease";
 
-  // Empty State
+    heroCard.innerHTML = `
+      <img src="${highlight.cover}" style="width: 100px; height: 100px; border-radius: var(--radius-lg); box-shadow: 0 8px 30px rgba(0,0,0,0.5);">
+      <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+        <span style="color: var(--accent); font-weight: 700; font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;">Jump back in</span>
+        <h2 style="font-size: var(--fs-2xl); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${cleanTitle(highlight.title, 25)}</h2>
+        <p style="color: var(--text-tertiary);">${highlight.artist}</p>
+      </div>
+      <div style="align-self: center; width: 48px; height: 48px; background: var(--text-primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--bg-primary);">
+        ${icons.play}
+      </div>
+    `;
+    heroCard.addEventListener("click", () => queueManager.playTrack(highlight));
+    header.appendChild(heroCard);
+  }
+
+  page.appendChild(header);
+
   if (allTracks.length === 0) {
-    const emptyState = createElement("div", "home-empty-state");
+    // ... same empty state as before ...
+    const emptyState = createElement("div", "home-empty-state animate-in");
     emptyState.innerHTML = `
       <div class="empty-icon">${icons.music}</div>
       <h2 class="empty-title">Digital silence</h2>
-      <p class="empty-desc">No music found yet. Select a folder to start listening.</p>
-      <button class="btn btn-primary" id="home-scan-btn">
-        ${icons.folder}
-        Select Music Folder
+      <button class="btn btn-primary" id="home-scan-btn" style="margin-top: var(--sp-6);">
+        ${icons.folder} Select Music Folder
       </button>
-      <div class="empty-tips">
-        <span>Tip: Pick a folder where your music files are stored</span>
-      </div>
     `;
     page.appendChild(emptyState);
-
     emptyState
       .querySelector("#home-scan-btn")
-      .addEventListener("click", async (e) => {
-        const btn = e.currentTarget;
-        btn.classList.add("loading");
-        btn.disabled = true;
-        await library.pickAndScanFolder();
-        btn.classList.remove("loading");
-        btn.disabled = false;
-      });
-
+      .addEventListener("click", () => musicLibrary.pickAndScanFolder());
     container.appendChild(page);
     return;
   }
 
-  // Featured quick-access cards
-  const featured =
-    recentTracks.length > 0 ? recentTracks.slice(0, 6) : allTracks.slice(0, 6);
-
-  if (featured.length > 0) {
-    const featuredRow = createElement("div", "featured-row");
-    featuredRow.style.marginBottom = "var(--sp-6)";
-
-    featured.forEach((track) => {
-      const card = createElement("div", "featured-card");
-      const coverHtml = track.cover
-        ? `<img class="featured-card-art" src="${track.cover}" alt="" loading="lazy" onerror="this.style.display='none'">`
-        : `<div class="featured-card-art" style="display:flex;align-items:center;justify-content:center;background:var(--bg-surface);color:var(--text-tertiary)">${icons.music}</div>`;
-      card.innerHTML = `
-        ${coverHtml}
-        <span class="featured-card-title">${track.title}</span>
-      `;
-      card.addEventListener("click", () => {
-        queueManager.playAll(
-          library.getAllTracks(),
-          library.getAllTracks().findIndex((t) => t.id === track.id),
-        );
-        library.addToRecent(track.id);
-      });
-      featuredRow.appendChild(card);
-    });
-
-    page.appendChild(featuredRow);
-  }
-
-  // Albums Section
-  const albums = library.getAllAlbums();
-  if (albums.length > 0) {
-    const section = createElement("div", "");
-    section.innerHTML = `
-      <div class="section-header">
-        <h2 class="section-title">Albums</h2>
-        <a class="section-link" href="#/library">Show all</a>
-      </div>
-    `;
-
-    const grid = createElement("div", "cards-grid");
-    albums.slice(0, 6).forEach((album) => {
-      const card = createElement("div", "card");
-      const coverHtml = album.cover
-        ? `<img class="card-art" src="${album.cover}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
-        : "";
-      card.innerHTML = `
-        <div style="position: relative;">
-          ${coverHtml}
-          <div class="card-art card-art-fallback" style="${album.cover ? "display:none;" : "display:flex;"}align-items:center;justify-content:center;color:var(--text-tertiary)">${icons.album}</div>
-          <button class="card-play-btn">${icons.play}</button>
-        </div>
-        <div class="card-title">${album.title}</div>
-        <div class="card-subtitle">${album.artist || "Unknown Artist"}${album.year ? " · " + album.year : ""}</div>
-      `;
-
-      card.querySelector(".card-play-btn").addEventListener("click", (e) => {
-        e.stopPropagation();
-        const tracks = library.getTracksByAlbum(album.id);
-        if (tracks.length > 0) {
-          queueManager.playAll(tracks, 0);
-          library.addToRecent(tracks[0].id);
-        }
-      });
-
-      card.addEventListener("click", () => {
-        router.navigate(`#/album/${album.id}`);
-      });
-
-      grid.appendChild(card);
-    });
-
-    section.appendChild(grid);
+  // Horizontal Feed: Recently Played
+  if (recentTracks.length > 0) {
+    const section = createHorizontalSection(
+      "Recently Played",
+      recentTracks.slice(0, 10),
+    );
+    section.classList.add("animate-in");
+    section.style.animationDelay = "0.1s";
     page.appendChild(section);
   }
 
-  // Artists Section
-  const artists = library.getAllArtists();
-  if (artists.length > 0) {
-    const section = createElement("div", "");
-    section.style.marginTop = "var(--sp-6)";
-    section.innerHTML = `
-      <div class="section-header">
-        <h2 class="section-title">Artists</h2>
-        <a class="section-link" href="#/library">Show all</a>
-      </div>
-    `;
-
-    const grid = createElement("div", "cards-grid");
-    artists.slice(0, 6).forEach((artist) => {
-      const card = createElement("div", "card");
-      card.innerHTML = `
-        <div style="position: relative;">
-          <div class="card-art rounded" style="display:flex;align-items:center;justify-content:center;background:var(--bg-surface);color:var(--text-tertiary)">${icons.artist}</div>
-          <button class="card-play-btn">${icons.play}</button>
-        </div>
-        <div class="card-title">${artist.name}</div>
-        <div class="card-subtitle">${artist.numTracks || 0} tracks</div>
-      `;
-
-      card.querySelector(".card-play-btn").addEventListener("click", (e) => {
-        e.stopPropagation();
-        const tracks = library.getTracksByArtist(artist.id);
-        if (tracks.length > 0) {
-          queueManager.playAll(tracks, 0);
-          library.addToRecent(tracks[0].id);
-        }
-      });
-
-      card.addEventListener("click", () => {
-        router.navigate(`#/artist/${artist.id}`);
-      });
-
-      grid.appendChild(card);
-    });
-
-    section.appendChild(grid);
+  // Horizontal Feed: Most Played
+  if (mostPlayed.length > 0) {
+    const section = createHorizontalSection("Your Heavy Rotation", mostPlayed);
+    section.classList.add("animate-in");
+    section.style.animationDelay = "0.2s";
     page.appendChild(section);
   }
+
+  // Grid Section: Recently Added (Fresh)
+  const freshSection = createElement("section", "animate-in");
+  freshSection.style.marginTop = "var(--sp-10)";
+  freshSection.style.animationDelay = "0.3s";
+  freshSection.innerHTML = `<h2 class="section-title" style="margin-bottom: var(--sp-4);">Recently Added</h2>`;
+
+  const grid = createElement("div", "cards-grid");
+  recentlyAdded.forEach((track) => {
+    const card = createElement("div", "card");
+    card.innerHTML = `
+      <img class="card-art" src="${track.cover}" alt="">
+      <div class="card-title" style="font-size: var(--fs-base);">${cleanTitle(track.title, 30)}</div>
+      <div class="card-subtitle">${track.artist}</div>
+    `;
+    card.addEventListener("click", () => queueManager.playTrack(track));
+    grid.appendChild(card);
+  });
+  freshSection.appendChild(grid);
+  page.appendChild(freshSection);
 
   container.appendChild(page);
+}
+
+function createHorizontalSection(title, tracks) {
+  const section = createElement("section", "");
+  section.style.marginTop = "var(--sp-8)";
+  section.innerHTML = `
+    <h2 class="section-title" style="margin-bottom: var(--sp-4);">${title}</h2>
+    <div class="horizontal-scroll" style="display: flex; gap: var(--sp-4); overflow-x: auto; padding-bottom: var(--sp-4); scrollbar-width: none; -webkit-overflow-scrolling: touch;">
+      ${tracks
+        .map(
+          (t) => `
+        <div class="track-card-horizontal" data-id="${t.id}" style="flex: 0 0 140px; cursor: pointer;">
+          <div style="position: relative;">
+            <img src="${t.cover}" style="width: 140px; height: 140px; border-radius: var(--radius-lg); object-fit: cover; box-shadow: var(--shadow-lg);">
+          </div>
+          <div style="margin-top: var(--sp-2);">
+            <div style="font-weight: 600; font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${cleanTitle(t.title, 25)}</div>
+            <div style="font-size: var(--fs-xs); color: var(--text-tertiary);">${t.artist}</div>
+          </div>
+        </div>
+      `,
+        )
+        .join("")}
+    </div>
+  `;
+
+  section.querySelectorAll(".track-card-horizontal").forEach((card) => {
+    card.addEventListener("click", () => {
+      const track = musicLibrary.getTrackById(card.dataset.id);
+      if (track) queueManager.playTrack(track);
+    });
+  });
+
+  return section;
 }

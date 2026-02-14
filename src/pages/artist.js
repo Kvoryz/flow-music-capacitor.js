@@ -1,6 +1,6 @@
 // ZPlayer — Artist Detail Page
 import { icons } from "../core/icons.js";
-import { library } from "../core/library.js";
+import { musicLibrary } from "../core/library.js";
 import { queueManager } from "../core/queue.js";
 import { router } from "../router.js";
 import { createElement } from "../core/utils.js";
@@ -8,28 +8,32 @@ import { renderTrackList } from "../components/trackList.js";
 
 export function renderArtist(container, params) {
   container.innerHTML = "";
-  const artist = library.getArtistById(params.id);
+  const artist = musicLibrary.getArtistById(params.id);
   if (!artist) {
     container.innerHTML =
       '<div class="page"><div class="empty-state"><div class="empty-state-title">Artist not found</div></div></div>';
     return;
   }
 
-  const tracks = library.getTracksByArtist(artist.id);
-  const albums = library.getAlbumsByArtist(artist.id);
+  const tracks = musicLibrary.getTracksByArtist(artist.id);
+  const albums = musicLibrary.getAlbumsByArtist(artist.id);
+  const artistCover = musicLibrary.getArtistCover(artist.id);
   const page = createElement("div", "page");
 
   page.innerHTML = `
     <div class="page-header" style="flex-direction: column; align-items: center; text-align: center;">
       <div class="page-header-bg"></div>
-      <img class="page-header-art" src="${artist.image}" alt="${artist.name}" style="border-radius: 50%;">
+      ${
+        artistCover
+          ? `<img class="page-header-art" src="${artistCover}" alt="${artist.name}" style="border-radius: 50%;">`
+          : `<div class="page-header-art" style="border-radius: 50%; display:flex;align-items:center;justify-content:center;background:var(--bg-highlight);color:var(--text-tertiary)">${icons.artist}</div>`
+      }
       <div class="page-header-info" style="text-align: center;">
         <div class="page-header-type">Artist</div>
         <h1 class="page-header-title">${artist.name}</h1>
         <div class="page-header-meta" style="justify-content: center;">
-          <span>${artist.genre}</span>
-          <span class="page-header-dot"></span>
           <span>${tracks.length} songs</span>
+          ${albums.length > 0 ? `<span class="page-header-dot"></span><span>${albums.length} albums</span>` : ""}
         </div>
       </div>
     </div>
@@ -48,7 +52,7 @@ export function renderArtist(container, params) {
   // Play all
   page.querySelector("#play-artist").addEventListener("click", () => {
     queueManager.playAll(tracks, 0);
-    library.addToRecent(tracks[0].id);
+    musicLibrary.addToRecent(tracks[0].id);
   });
 
   // Shuffle
@@ -83,7 +87,7 @@ export function renderArtist(container, params) {
       `;
       card.querySelector(".card-play-btn").addEventListener("click", (e) => {
         e.stopPropagation();
-        const albumTracks = library.getTracksByAlbum(album.id);
+        const albumTracks = musicLibrary.getTracksByAlbum(album.id);
         queueManager.playAll(albumTracks, 0);
       });
       card.addEventListener("click", () =>

@@ -13,6 +13,19 @@ class QueueManager {
     audioEngine.on("ended", () => this.playNext());
     audioEngine.on("next", () => this.playNext());
     audioEngine.on("prev", () => this.playPrev());
+    audioEngine.on("transition", () => {
+      // Sync currentIndex with audioEngine's autonomous advance
+      if (this.currentIndex < this.queue.length - 1) {
+        this.currentIndex++;
+      } else if (audioEngine.repeatMode === "all") {
+        this.currentIndex = 0;
+      }
+
+      this._emit("trackchange", {
+        track: this.getCurrentTrack(),
+        index: this.currentIndex,
+      });
+    });
   }
 
   /**
@@ -65,6 +78,13 @@ class QueueManager {
     this._emit("queuechange");
   }
 
+  clearUpcoming() {
+    if (this.currentIndex >= 0) {
+      this.queue = this.queue.slice(0, this.currentIndex + 1);
+    }
+    this._emit("queuechange");
+  }
+
   playNext() {
     if (this.queue.length === 0) return;
 
@@ -72,6 +92,12 @@ class QueueManager {
     const currentTrack = this.getCurrentTrack();
     if (currentTrack) {
       this.history.push(currentTrack);
+    }
+
+    if (audioEngine.stopAfterCurrent) {
+      audioEngine.stopAfterCurrent = false;
+      audioEngine.pause();
+      return;
     }
 
     if (this.currentIndex < this.queue.length - 1) {
@@ -123,6 +149,7 @@ class QueueManager {
 
     if (enabled) {
       this.queue = this._shuffle([...this.originalQueue], -1, current);
+      this.currentIndex = 0;
     } else {
       this.queue = [...this.originalQueue];
       if (current) {
@@ -164,6 +191,15 @@ class QueueManager {
     const track = this.getCurrentTrack();
     if (track) {
       audioEngine.play(track);
+
+      // Pre-load next track for gapless/crossfade
+      const nextIndex = this.currentIndex + 1;
+      if (nextIndex < this.queue.length) {
+        audioEngine.preloadNext(this.queue[nextIndex]);
+      } else if (audioEngine.repeatMode === "all" && this.queue.length > 0) {
+        audioEngine.preloadNext(this.queue[0]);
+      }
+
       this._emit("trackchange", { track, index: this.currentIndex });
     }
   }

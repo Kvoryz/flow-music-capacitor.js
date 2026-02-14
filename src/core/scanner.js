@@ -8,13 +8,19 @@ const MusicScanner = registerPlugin("MusicScanner");
 
 /**
  * Convert native file paths and content:// URIs to WebView-accessible URLs.
- * This is REQUIRED for both audio playback and album art display in Capacitor.
+ * ALL non-http URIs must go through Capacitor.convertFileSrc() which converts:
+ *   - content://... → http://localhost/_capacitor_content_/...
+ *   - file://...    → http://localhost/_capacitor_file_/...
+ * Without this conversion, <audio> and <img> elements CANNOT load native URIs.
  */
 function convertUri(uri) {
   if (!uri) return "";
+  if (uri.startsWith("http")) return uri;
+
   try {
     return Capacitor.convertFileSrc(uri);
-  } catch {
+  } catch (e) {
+    console.warn("URI conversion failed for:", uri, e);
     return uri;
   }
 }
@@ -209,9 +215,13 @@ class LocalScanner {
     }));
 
     // For tracks — convert BOTH src (for playback) AND cover (for display)
+    // IMPORTANT: Prefer contentUri over src (file path) because Android 11+
+    // blocks raw file path access from WebView via scoped storage
     const enrichedTracks = tracks.map((t) => ({
       ...t,
-      src: convertUri(t.src || t.contentUri || ""),
+      src: convertUri(t.contentUri || t.src || ""),
+      rawCover: t.cover || "", // Original URI for native notification album art
+      rawContentUri: t.contentUri || "", // Original content URI for native metadata retriever
       cover: convertUri(t.cover),
     }));
 

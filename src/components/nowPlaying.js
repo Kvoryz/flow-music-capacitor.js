@@ -2,7 +2,7 @@
 import { icons } from "../core/icons.js";
 import { audioEngine } from "../core/audioEngine.js";
 import { queueManager } from "../core/queue.js";
-import { library } from "../core/library.js";
+import { musicLibrary } from "../core/library.js";
 import { store } from "../core/store.js";
 import { router } from "../router.js";
 import { formatTime, createElement } from "../core/utils.js";
@@ -82,16 +82,24 @@ export function createNowPlaying() {
 
   el.querySelector("#np-shuffle").addEventListener("click", () => {
     queueManager.toggleShuffle();
+    const enabled = audioEngine.shuffleMode;
+    store.showToast(enabled ? "Shuffle On 🔀" : "Shuffle Off");
   });
 
   el.querySelector("#np-repeat").addEventListener("click", () => {
-    audioEngine.toggleRepeat();
+    const mode = audioEngine.toggleRepeat();
+    const labels = {
+      off: "Repeat Off",
+      all: "Repeat All 🔁",
+      one: "Repeat One 🔂",
+    };
+    store.showToast(labels[mode] || "Repeat Off");
   });
 
   el.querySelector("#np-like").addEventListener("click", () => {
     const track = queueManager.getCurrentTrack();
     if (track) {
-      const liked = library.toggleFavorite(track.id);
+      const liked = musicLibrary.toggleFavorite(track.id);
       updateLikeButton(el, liked);
       store.showToast(
         liked ? "Added to Liked Songs" : "Removed from Liked Songs",
@@ -209,6 +217,12 @@ export function createNowPlaying() {
     }
   });
 
+  // Real-time metadata updates
+  musicLibrary.on("updated", () => {
+    const track = queueManager.getCurrentTrack();
+    if (track) updateNowPlayingUI(el, track);
+  });
+
   return el;
 }
 
@@ -217,7 +231,7 @@ function updateNowPlayingUI(el, track) {
   el.querySelector("#np-bg").style.backgroundImage = `url(${track.cover})`;
   el.querySelector("#np-title").textContent = track.title;
   el.querySelector("#np-artist").textContent = track.artist;
-  updateLikeButton(el, library.isFavorite(track.id));
+  updateLikeButton(el, musicLibrary.isFavorite(track.id));
 }
 
 function updateLikeButton(el, liked) {

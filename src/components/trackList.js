@@ -2,7 +2,7 @@
 import { icons } from "../core/icons.js";
 import { audioEngine } from "../core/audioEngine.js";
 import { queueManager } from "../core/queue.js";
-import { library } from "../core/library.js";
+import { musicLibrary } from "../core/library.js";
 import { store } from "../core/store.js";
 import { formatTime, createElement } from "../core/utils.js";
 
@@ -10,7 +10,7 @@ export function renderTrackList(tracks, container, options = {}) {
   const {
     showAlbumArt = true,
     showNumbers = true,
-    context = "library",
+    context = "musicLibrary",
   } = options;
   container.innerHTML = "";
 
@@ -20,7 +20,7 @@ export function renderTrackList(tracks, container, options = {}) {
     const isPlaying =
       queueManager.getCurrentTrack()?.id === track.id && audioEngine.isPlaying;
     const isCurrent = queueManager.getCurrentTrack()?.id === track.id;
-    const isFav = library.isFavorite(track.id);
+    const isFav = musicLibrary.isFavorite(track.id);
 
     const item = createElement(
       "div",
@@ -55,7 +55,7 @@ export function renderTrackList(tracks, container, options = {}) {
       }
       ${showAlbumArt ? `<img class="track-art" src="${track.cover || ""}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="track-art track-art-fallback" style="display:none;align-items:center;justify-content:center;color:var(--text-tertiary)">${icons.music}</div>` : ""}
       <div class="track-info">
-        <div class="track-title">${track.title}</div>
+        <div class="track-title">${cleanTitle(track.title, 40)}</div>
         <div class="track-artist">${track.artist}</div>
       </div>
       <div class="track-meta">
@@ -73,14 +73,14 @@ export function renderTrackList(tracks, container, options = {}) {
     item.addEventListener("click", (e) => {
       if (e.target.closest("[data-action]")) return;
       queueManager.playAll(tracks, index);
-      library.addToRecent(track.id);
+      musicLibrary.addToRecent(track.id);
     });
 
     // Like button
     const likeBtn = item.querySelector('[data-action="like"]');
     likeBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const liked = library.toggleFavorite(track.id);
+      const liked = musicLibrary.toggleFavorite(track.id);
       likeBtn.className = `track-like${liked ? " liked" : ""}`;
       likeBtn.innerHTML = liked ? icons.heartFill : icons.heart;
       store.showToast(

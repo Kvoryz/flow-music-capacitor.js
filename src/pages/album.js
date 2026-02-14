@@ -1,6 +1,6 @@
 // ZPlayer — Album Detail Page
 import { icons } from "../core/icons.js";
-import { library } from "../core/library.js";
+import { musicLibrary } from "../core/library.js";
 import { queueManager } from "../core/queue.js";
 import { router } from "../router.js";
 import { createElement, formatTime } from "../core/utils.js";
@@ -8,14 +8,14 @@ import { renderTrackList } from "../components/trackList.js";
 
 export function renderAlbum(container, params) {
   container.innerHTML = "";
-  const album = library.getAlbumById(params.id);
+  const album = musicLibrary.getAlbumById(params.id);
   if (!album) {
     container.innerHTML =
       '<div class="page"><div class="empty-state"><div class="empty-state-title">Album not found</div></div></div>';
     return;
   }
 
-  const tracks = library.getTracksByAlbum(album.id);
+  const tracks = musicLibrary.getTracksByAlbum(album.id);
   const totalDuration = tracks.reduce((sum, t) => sum + t.duration, 0);
   const page = createElement("div", "page");
 
@@ -57,7 +57,7 @@ export function renderAlbum(container, params) {
   // Play all
   page.querySelector("#play-album").addEventListener("click", () => {
     queueManager.playAll(tracks, 0);
-    library.addToRecent(tracks[0].id);
+    musicLibrary.addToRecent(tracks[0].id);
   });
 
   // Shuffle
