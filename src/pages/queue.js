@@ -29,7 +29,6 @@ export function renderQueue(container) {
     const content = page.querySelector("#queue-content");
     if (content) renderQueueContent(content);
 
-    // Update clear button
     const clearBtn = page.querySelector("#clear-queue-btn");
     const upcoming = queueManager.getUpcoming();
     if (clearBtn) {
@@ -38,7 +37,7 @@ export function renderQueue(container) {
   };
 
   queueManager.on("queuechange", updateQueueUI);
-  queueManager.on("trackchange", updateQueueUI); // Update active playing track
+  queueManager.on("trackchange", updateQueueUI);
   audioEngine.on("shufflechange", updateQueueUI);
   musicLibrary.on("updated", updateQueueUI);
 

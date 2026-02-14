@@ -12,16 +12,16 @@ class QueueManager {
     audioEngine.on("next", () => this.playNext());
     audioEngine.on("prev", () => this.playPrev());
     audioEngine.on("transition", () => {
-      // Sync currentIndex with audioEngine's autonomous advance
+      console.log(
+        `Transitioning queue: ${this.currentIndex} -> ${this.currentIndex + 1}`,
+      );
       if (this.currentIndex < this.queue.length - 1) {
         this.currentIndex++;
       } else if (audioEngine.repeatMode === "all") {
         this.currentIndex = 0;
       }
 
-      // CRITICAL: Pre-load the track AFTER the one just started
       this._syncPreload();
-
       this._emit("trackchange", {
         track: this.getCurrentTrack(),
         index: this.currentIndex,
@@ -29,9 +29,6 @@ class QueueManager {
     });
   }
 
-  /**
-   * Set and play a list of tracks starting from index
-   */
   playAll(tracks, startIndex = 0) {
     this.originalQueue = [...tracks];
     this.queue = audioEngine.shuffleMode
@@ -41,9 +38,6 @@ class QueueManager {
     this._playCurrentTrack();
   }
 
-  /**
-   * Play a specific track from the current queue or as a standalone
-   */
   playTrack(track) {
     const idx = this.queue.findIndex((t) => t.id === track.id);
     if (idx >= 0) {
@@ -66,7 +60,6 @@ class QueueManager {
     if (index < this.currentIndex) {
       this.currentIndex--;
     } else if (index === this.currentIndex) {
-      // If removing current track, just continue
     }
     this.queue.splice(index, 1);
     this._emit("queuechange");
@@ -89,7 +82,6 @@ class QueueManager {
   playNext() {
     if (this.queue.length === 0) return;
 
-    // Save to history
     const currentTrack = this.getCurrentTrack();
     if (currentTrack) {
       this.history.push(currentTrack);
@@ -105,14 +97,12 @@ class QueueManager {
       this.currentIndex++;
       this._playCurrentTrack();
     } else if (audioEngine.repeatMode === "all") {
-      // Loop back to start
       this.currentIndex = 0;
       if (audioEngine.shuffleMode) {
         this.queue = this._shuffle([...this.originalQueue]);
       }
       this._playCurrentTrack();
     } else {
-      // End of queue
       audioEngine.pause();
       this._emit("queueend");
     }
@@ -120,7 +110,6 @@ class QueueManager {
 
   playPrev() {
     if (audioEngine.currentTime > 3) {
-      // Restart current track if > 3 seconds in
       audioEngine.seek(0);
       return;
     }
@@ -171,7 +160,6 @@ class QueueManager {
     }
 
     const result = [...arr];
-    // Put startIndex at front, shuffle rest
     if (startIndex >= 0 && startIndex < result.length) {
       const [first] = result.splice(startIndex, 1);
       for (let i = result.length - 1; i > 0; i--) {

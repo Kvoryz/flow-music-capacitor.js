@@ -27,6 +27,7 @@ export function renderTrackList(tracks, container, options = {}) {
       `track-item${isCurrent ? " playing" : ""}`,
     );
     item.dataset.trackId = track.id;
+    item.dataset.index = index + 1;
     item.id = `track-${track.id}`;
 
     item.innerHTML = `

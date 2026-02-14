@@ -12,7 +12,7 @@ export function renderDiscovery(container) {
   const recentTrack = musicLibrary.getRecentlyAdded(1)[0];
   const forgottenTracks = musicLibrary.getForgottenTracks(10);
   const randomAlbum = musicLibrary.getRandomAlbum();
-  const freshFinds = musicLibrary.getRecentlyAdded(10);
+  const highlightedAlbums = musicLibrary.getRandomAlbums(8);
 
   page.innerHTML = `
     <header style="margin-bottom: var(--sp-8);">
@@ -24,12 +24,17 @@ export function renderDiscovery(container) {
       
       <!-- Feature Card: Lucky Dip -->
       ${renderLuckyDip(randomAlbum)}
+      ${!randomAlbum ? renderPlaceholder("Lucky Dip", icons.shuffle, "Shuffle your collection once you have albums.") : ""}
 
       <!-- Horizon Mix: Forgotten Gems -->
       <section style="margin-top: var(--sp-10);">
         <h2 class="section-title" style="margin-bottom: var(--sp-4); display: flex; align-items: center; gap: var(--sp-2);">
           Forgotten Gems
         </h2>
+        
+        ${
+          forgottenTracks.length > 0
+            ? `
         <div class="horizontal-scroll" style="display: flex; gap: var(--sp-4); overflow-x: auto; padding-bottom: var(--sp-4); scrollbar-width: none;">
           ${forgottenTracks
             .map(
@@ -44,16 +49,60 @@ export function renderDiscovery(container) {
           `,
             )
             .join("")}
-        </div>
+        </div>`
+            : renderPlaceholder(
+                "Forgotten Gems",
+                icons.history,
+                "Listen to more music to populate this list.",
+              )
+        }
+
       </section>
 
-      <!-- Grid: Fresh Finds -->
+      <!-- Grid: Album Highlights -->
       <section style="margin-top: var(--sp-10);">
-        <h2 class="section-title" style="margin-bottom: var(--sp-4);">Recently Added</h2>
-        <div id="fresh-finds-list"></div>
+        <h2 class="section-title" style="margin-bottom: var(--sp-4);">Album Highlights</h2>
+        
+        ${
+          highlightedAlbums.length > 0
+            ? `
+        <div class="cards-grid">
+          ${highlightedAlbums
+            .map(
+              (album) => `
+            <div class="card album-card" data-album-id="${album.id}">
+              <img class="card-art" src="${album.cover}" alt="">
+              <div class="card-title" style="font-size: var(--fs-base);">${cleanTitle(album.title, 30)}</div>
+              <div class="card-subtitle">${album.artist}</div>
+            </div>
+          `,
+            )
+            .join("")}
+        </div>`
+            : renderPlaceholder(
+                "Highlights",
+                icons.album,
+                "Scan your library to see albums here.",
+              )
+        }
+
       </section>
     </div>
   `;
+
+  function renderPlaceholder(title, icon, message) {
+    return `
+      <div class="glass-card" style="padding: 20px; border-radius: 16px; display: flex; align-items: center; gap: 15px; opacity: 0.6; border: 1px dashed var(--border); margin-bottom: 10px;">
+         <div style="width: 40px; height: 40px; background: var(--bg-elevated); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--text-secondary);">
+            ${icon}
+         </div>
+         <div style="flex: 1;">
+            <div style="font-size: 14px; font-weight: 600;">${title} Unavailable</div>
+            <div style="font-size: 11px; color: var(--text-tertiary);">${message}</div>
+         </div>
+      </div>
+    `;
+  }
 
   container.appendChild(page);
 
@@ -66,16 +115,17 @@ export function renderDiscovery(container) {
     });
   });
 
+  page.querySelectorAll(".album-card").forEach((card) => {
+    card.addEventListener("click", () => {
+      router.navigate(`#/album/${card.dataset.albumId}`);
+    });
+  });
+
   const luckyDipBtn = page.querySelector("#lucky-dip-play");
   if (luckyDipBtn && randomAlbum) {
     luckyDipBtn.addEventListener("click", () => {
       router.navigate(`#/album/${randomAlbum.id}`);
     });
-  }
-
-  const freshList = page.querySelector("#fresh-finds-list");
-  if (freshList) {
-    renderTrackList(freshFinds, freshList);
   }
 }
 

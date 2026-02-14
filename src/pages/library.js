@@ -1,6 +1,7 @@
 import { icons } from "../core/icons.js";
 import { musicLibrary } from "../core/library.js";
 import { queueManager } from "../core/queue.js";
+import { audioEngine } from "../core/audioEngine.js";
 import { router } from "../router.js";
 import { store } from "../core/store.js";
 import { createElement, cleanTitle } from "../core/utils.js";
@@ -14,8 +15,8 @@ export function renderLibrary(container) {
     <header style="margin-bottom: var(--sp-8);">
       <div style="display:flex; align-items:flex-start; justify-content:space-between;">
         <div>
-          <h1 class="page-title" style="margin-bottom: var(--sp-1);">Your Library</h1>
-          <p style="color: var(--text-secondary); font-size: var(--fs-sm);">Manage your local collection.</p>
+          <h1 class="page-title" style="margin-bottom: var(--sp-2);">Your Library</h1>
+          <p style="color: var(--text-secondary); font-size: var(--fs-md);">Manage your local collection.</p>
         </div>
         <button class="icon-btn" id="refresh-library-btn" title="Add Music Folder" style="width:40px; height:40px; border-radius:50%; background:var(--bg-surface); display:flex; align-items:center; justify-content:center;">
           ${icons.folder}
@@ -135,6 +136,44 @@ export function renderLibrary(container) {
   controlsEl.style.display = "block";
   renderTab(contentEl, "songs", { currentFilter, currentSort });
 
+  const updateActiveState = () => {
+    const currentTrack = queueManager.getCurrentTrack();
+    if (!currentTrack) return;
+
+    page.querySelectorAll(".track-item").forEach((item) => {
+      const isCurrent = item.dataset.trackId === currentTrack.id;
+      if (isCurrent) {
+        item.classList.add("playing");
+      } else {
+        item.classList.remove("playing");
+      }
+
+      const numCol = item.querySelector(".track-number-col");
+      if (numCol) {
+        const trackIndex = parseInt(
+          item.querySelector(".track-number")?.textContent || "0",
+        );
+        if (isCurrent && audioEngine.isPlaying) {
+          if (!numCol.querySelector(".eq-bars")) {
+            numCol.innerHTML = `
+            <div class="eq-bars">
+              <div class="eq-bar"></div>
+              <div class="eq-bar"></div>
+              <div class="eq-bar"></div>
+              <div class="eq-bar"></div>
+            </div>`;
+          }
+        } else {
+          if (numCol.querySelector(".eq-bars")) {
+            numCol.innerHTML = `
+              <span class="track-number">${item.dataset.index}</span>
+              <span class="track-play-icon">${icons.play}</span>`;
+          }
+        }
+      }
+    });
+  };
+
   const onUpdate = () => {
     if (document.getElementById("library-tabs")) {
       const activeTab = page.querySelector(".tab.active");
@@ -146,9 +185,16 @@ export function renderLibrary(container) {
       }
     } else {
       musicLibrary.off("updated", onUpdate);
+      queueManager.off("trackchange", updateActiveState);
+      audioEngine.off("play", updateActiveState);
+      audioEngine.off("pause", updateActiveState);
     }
   };
+
   musicLibrary.on("updated", onUpdate);
+  queueManager.on("trackchange", updateActiveState);
+  audioEngine.on("play", updateActiveState);
+  audioEngine.on("pause", updateActiveState);
 }
 
 function renderTab(container, tabName, options = {}) {
@@ -189,7 +235,7 @@ function renderSongsTab(
     );
   }
 
-  tracks = musicLibrary.sortTracks(tracks, currentSort, currentSort !== "date"); // Date usually desc
+  tracks = musicLibrary.sortTracks(tracks, currentSort, currentSort !== "date");
 
   if (tracks.length === 0) {
     showEmpty(

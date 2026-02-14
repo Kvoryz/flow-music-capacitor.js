@@ -143,7 +143,6 @@ export function createNowPlaying() {
     const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     dragTime = pct * (audioEngine.duration || 0);
 
-    // UI Update only
     progressFill.style.width = pct * 100 + "%";
     timeCurrent.textContent = formatTime(dragTime);
   };

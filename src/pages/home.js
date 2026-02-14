@@ -1,6 +1,7 @@
 import { icons } from "../core/icons.js";
 import { musicLibrary } from "../core/library.js";
 import { queueManager } from "../core/queue.js";
+import { store } from "../core/store.js";
 import { createElement, cleanTitle } from "../core/utils.js";
 import { router } from "../router.js";
 
@@ -38,6 +39,11 @@ export function renderHome(container) {
     heroCard.style.gap = "var(--sp-6)";
     heroCard.style.cursor = "pointer";
     heroCard.style.transition = "transform 0.2s ease";
+    // Inline glass style
+    heroCard.style.background = "rgba(255, 255, 255, 0.03)";
+    heroCard.style.backdropFilter = "blur(10px)";
+    heroCard.style.webkitBackdropFilter = "blur(10px)";
+    heroCard.style.border = "1px solid rgba(255, 255, 255, 0.08)";
 
     heroCard.innerHTML = `
       <div style="width: 100px; height: 100px; display: flex; align-items: center; justify-content: center; background: var(--bg-card); border-radius: var(--radius-lg); overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.5);">
@@ -65,11 +71,23 @@ export function renderHome(container) {
 
   if (allTracks.length === 0) {
     const emptyState = createElement("div", "home-empty-state");
+    emptyState.style.display = "flex";
+    emptyState.style.flexDirection = "column";
+    emptyState.style.alignItems = "center";
+    emptyState.style.justifyContent = "center";
+    emptyState.style.height = "60vh";
+    emptyState.style.textAlign = "center";
+
     emptyState.innerHTML = `
-      <div class="empty-icon">${icons.music}</div>
-      <h2 class="empty-title">Digital silence</h2>
-      <button class="btn btn-primary" id="home-scan-btn" style="margin-top: var(--sp-6);">
-        ${icons.folder} Select Music Folder
+      <div style="width: 80px; height: 80px; background: rgba(var(--accent-rgb), 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--accent); margin-bottom: var(--sp-6); box-shadow: 0 0 40px rgba(var(--accent-rgb), 0.2);">
+        <svg style="width: 40px; height: 40px;" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+      </div>
+      <h2 style="font-size: var(--fs-xl); font-weight: 700; margin-bottom: var(--sp-2);">Your Library is Empty</h2>
+      <p style="color: var(--text-secondary); max-width: 280px; margin-bottom: var(--sp-8); line-height: 1.5;">
+        Import your local music files to start listening. We support MP3, FLAC, and WAV.
+      </p>
+      <button class="btn btn-primary" id="home-scan-btn" style="padding: 12px 32px; border-radius: 50px; font-weight: 700;">
+        ${icons.folder} <span>Select Music Folder</span>
       </button>
     `;
     page.appendChild(emptyState);
@@ -85,13 +103,47 @@ export function renderHome(container) {
       "Recently Played",
       recentTracks.slice(0, 10),
     );
-    section.classList.add("fade-in-up"); // Standard sub-transition if needed
+    section.classList.add("fade-in-up");
+    page.appendChild(section);
+  } else {
+    const section = createElement("section", "fade-in-up");
+    section.style.marginTop = "var(--sp-8)";
+    section.innerHTML = `
+      <h2 class="section-title" style="margin-bottom: var(--sp-4); opacity: 0.5;">Recently Played</h2>
+      <div class="glass-card" style="padding: 20px; border-radius: 16px; display: flex; align-items: center; gap: 15px; opacity: 0.6; border: 1px dashed var(--border);">
+         <div style="width: 40px; height: 40px; background: var(--bg-elevated); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--text-secondary);">
+            ${icons.clock || '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-8 8 3.58-8 8-8zm-.22-13h-.06c-.4 0-.72.32-.72.72v4.72c0 .35.18.68.49.86l4.15 2.49c.34.2.78.1.98-.24a.71.71 0 00-.25-.99l-3.87-2.3V7.72c0-.4-.32-.72-.72-.72z"/></svg>'}
+         </div>
+         <div style="flex: 1;">
+            <div style="font-size: 14px; font-weight: 600;">No history yet</div>
+            <div style="font-size: 11px; color: var(--text-tertiary);">Start listening to build your timeline.</div>
+         </div>
+      </div>
+    `;
     page.appendChild(section);
   }
 
+  // Most Played Section (or Placeholder)
   if (mostPlayed.length > 0) {
-    const section = createHorizontalSection("Your Heavy Rotation", mostPlayed);
+    const section = createHorizontalSection("Most Played Songs", mostPlayed);
     section.classList.add("fade-in-up");
+    page.appendChild(section);
+  } else {
+    // Placeholder for Most Played
+    const section = createElement("section", "fade-in-up");
+    section.style.marginTop = "var(--sp-8)";
+    section.innerHTML = `
+      <h2 class="section-title" style="margin-bottom: var(--sp-4); opacity: 0.5;">On Repeat</h2>
+      <div class="glass-card" style="padding: 20px; border-radius: 16px; display: flex; align-items: center; gap: 15px; opacity: 0.6; border: 1px dashed var(--border);">
+         <div style="width: 40px; height: 40px; background: var(--bg-elevated); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--accent);">
+            ${icons.activity || '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>'}
+         </div>
+         <div style="flex: 1;">
+            <div style="font-size: 14px; font-weight: 600;">Your favorites will appear here</div>
+            <div style="font-size: 11px; color: var(--text-tertiary);">Listen more to discover your top tracks.</div>
+         </div>
+      </div>
+    `;
     page.appendChild(section);
   }
 

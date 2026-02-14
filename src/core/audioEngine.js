@@ -36,6 +36,7 @@ class AudioEngine {
       localStorage.getItem("flow_avoid_short") !== "false";
     this.minTrackDuration =
       parseInt(localStorage.getItem("flow_min_duration")) || 30;
+    this.monoMode = localStorage.getItem("flow_mono_mode") === "true";
 
     this.consecutiveErrorCount = 0;
     this._transitionedFrom = null;
@@ -56,7 +57,10 @@ class AudioEngine {
     this._setupMediaSession();
     this._setupNativeListener();
 
-    setTimeout(() => this._loadEQSettings(), 100);
+    setTimeout(() => {
+      this._loadEQSettings();
+      if (this.monoMode) this.setMonoMode(true);
+    }, 100);
   }
 
   _loadEQSettings() {
@@ -71,10 +75,6 @@ class AudioEngine {
     }
   }
 
-  /**
-   * Lazy-init Web Audio API — only called when EQ is actually changed.
-   * Before this is called, audio plays through native decoder at full quality.
-   */
   _ensureAudioContext() {
     if (this._eqInitialized) return;
     this._eqInitialized = true;
@@ -88,7 +88,7 @@ class AudioEngine {
       this.volumeGain.gain.value = this.volume;
 
       this.masterGain = this.audioCtx.createGain();
-      this.masterGain.gain.value = 1.2; // Makeup gain for EQ overhead
+      this.masterGain.gain.value = 3.0;
       this.masterGain.connect(this.audioCtx.destination);
       this.volumeGain.connect(this.masterGain);
 
@@ -148,7 +148,6 @@ class AudioEngine {
   }
 
   _setupAudioEvents(player) {
-    // Resume AudioContext on user interaction or visibility change to prevent "dead" audio
     const resumeCtx = () => {
       if (this.audioCtx && this.audioCtx.state === "suspended") {
         this.audioCtx.resume();
@@ -173,9 +172,15 @@ class AudioEngine {
         this._updateMediaPosition();
       }
 
-      if (this.nextTrack && !this.isCrossfading && this.duration > 0) {
+      if (
+        this.nextTrack &&
+        !this.isCrossfading &&
+        isFinite(this.duration) &&
+        this.duration > 2 &&
+        isFinite(this.currentTime) &&
+        this.currentTime > 1
+      ) {
         const remaining = this.duration - this.currentTime;
-        // Trigger precisely at the crossfade duration, or 0.1s for gapless
         const triggerPoint = Math.max(0.1, this.crossfadeDuration);
         if (remaining <= triggerPoint) {
           this._startTransition();
@@ -185,7 +190,6 @@ class AudioEngine {
 
     player.addEventListener("loadedmetadata", () => {
       if (player === this.activePlayer) {
-        // Track ID guard: ensure we don't update from a stale metadata load
         if (this.currentTrack && player.src.includes(this.currentTrack.src)) {
           this.duration = player.duration;
           this._emit("loaded", { duration: this.duration });
@@ -194,12 +198,10 @@ class AudioEngine {
     });
 
     player.addEventListener("ended", () => {
-      // Ignore if: not active player, in crossfade, changing track, or already transitioned
       if (
         player !== this.activePlayer ||
         this.isCrossfading ||
-        this._changingTrack ||
-        this._transitionedFrom === player
+        this._changingTrack
       ) {
         return;
       }
@@ -209,7 +211,7 @@ class AudioEngine {
     player.addEventListener("play", () => {
       if (player === this.activePlayer) {
         this.isPlaying = true;
-        this.consecutiveErrorCount = 0; // Reset on successful play
+        this.consecutiveErrorCount = 0;
         this._emit("play", { track: this.currentTrack });
         if ("mediaSession" in navigator)
           navigator.mediaSession.playbackState = "playing";
@@ -218,9 +220,6 @@ class AudioEngine {
     });
 
     player.addEventListener("pause", () => {
-      // During crossfade, we don't emit 'pause' from the listener because
-      // it might be a spurious event from the fade-out player being stopped.
-      // The master pause() method handles state for both.
       if (
         player === this.activePlayer &&
         !this.isCrossfading &&
@@ -234,10 +233,8 @@ class AudioEngine {
     });
 
     player.addEventListener("error", (e) => {
-      // Ignore errors during track changes (MEDIA_ERR_ABORTED from src swap)
       if (this._changingTrack) return;
 
-      // Check for MEDIA_ERR_ABORTED specifically if possible (Code 4)
       if (
         player.error &&
         (player.error.code === 4 || player.error.name === "AbortError")
@@ -260,7 +257,6 @@ class AudioEngine {
         }
 
         this._emit("error", { error: e });
-        // Auto-skip to next track on actual media errors, but only if still current
         this._scheduleNext(transitionId);
       }
     });
@@ -269,7 +265,6 @@ class AudioEngine {
   _scheduleNext(transitionId, delay = 500) {
     this._clearPendingNext();
     this._pendingNextTimeout = setTimeout(() => {
-      // Abortion guard
       if (this._currentTransitionId !== transitionId) return;
 
       this._emit("next");
@@ -354,17 +349,14 @@ class AudioEngine {
 
   async play(track, preFade = false) {
     if (!track) return;
-    // For local tracks, we need a src. For YouTube, we'll fetch it below.
     if (!track.isYouTube && !track.src) return;
 
     if (preFade) {
-      // Prepared by transition
       return;
     }
 
     this._clearPendingNext();
 
-    // Abort any active transition
     this._currentTransitionId++;
     this.isCrossfading = false;
 
@@ -375,41 +367,29 @@ class AudioEngine {
     this.currentTime = 0;
     this.duration = 0;
 
-    // Update metadata IMMEDIATELY (before play) so UI updates even if play is slow
     this._updateMediaSession(track);
     this._updateNativeNotification(track, true);
     this._emit("trackchange", { track });
-
-    // Guard: prevent spurious events (ended/error/pause) when changing src
     this._changingTrack = true;
     this.activePlayer.pause();
     this.activePlayer.src = track.src;
-    // When Web Audio is active, we let the GainNode handle the master volume
-    // but the player itself must be at 1.0 to feed the graph at full scale.
     this.activePlayer.volume = this._eqInitialized ? 1.0 : this.volume;
-    // NOTE: _changingTrack stays true until play() resolves/rejects
 
-    // Resume AudioContext if it exists and is suspended
     if (this.audioCtx && this.audioCtx.state === "suspended") {
       this.audioCtx.resume().catch(() => {});
     }
 
-    // Play — don't await to preserve user gesture context
     const transitionId = this._currentTransitionId;
 
-    // Safety delay for Android WebView src transition
     setTimeout(() => {
       if (this._currentTransitionId !== transitionId) return;
 
       this.activePlayer
         .play()
         .then(() => {
-          // Abortion guard
           if (this._currentTransitionId !== transitionId) return;
 
           this._changingTrack = false;
-
-          // Dynamic Colors — scoped to Now Playing screen only
           if (track.cover) {
             import("./utils.js").then(
               async ({ getDominantColor, rgbToHex }) => {
@@ -434,7 +414,6 @@ class AudioEngine {
 
           this._changingTrack = false;
           console.error("Play failed:", err);
-          // Only auto-skip on actual media errors, not user gesture issues
           if (err.name !== "NotAllowedError") {
             this._scheduleNext(transitionId);
           }
@@ -484,13 +463,8 @@ class AudioEngine {
       if (this._currentTransitionId !== transitionId) return;
 
       if (duration > 0) {
-        if (this._eqInitialized && this.audioCtx && this.masterGain) {
-          this._volumeRamp(fadeInPlayer, 0, this.volume, duration);
-          this._volumeRamp(fadeOutPlayer, this.volume, 0, duration);
-        } else {
-          this._volumeRamp(fadeInPlayer, 0, this.volume, duration);
-          this._volumeRamp(fadeOutPlayer, this.volume, 0, duration);
-        }
+        this._volumeRamp(fadeInPlayer, 0, this.volume, duration);
+        this._volumeRamp(fadeOutPlayer, this.volume, 0, duration);
 
         await new Promise((r) => setTimeout(r, duration * 1000));
         if (this._currentTransitionId !== transitionId) return;
@@ -502,24 +476,23 @@ class AudioEngine {
       fadeOutPlayer.src = "";
       this.isCrossfading = false;
     } catch (err) {
-      console.error("Transition failed:", err);
+      console.error("Transition failed, attempting recovery:", err);
+      this.isCrossfading = false;
       if (this._currentTransitionId === transitionId) {
-        this.isCrossfading = false;
+        // Recovery: if transition play failed, try to start normally via hard reset
+        this.play(this.currentTrack);
       }
     }
   }
 
-  /**
-   * Smooth volume ramping for players
-   */
   async _volumeRamp(player, start, end, duration) {
-    const steps = 40; // Higher resolution for smoother "feel"
+    const steps = 40;
     const interval = (duration * 1000) / steps;
     const volStep = (end - start) / steps;
     let currentVol = start;
 
     for (let i = 0; i < steps; i++) {
-      if (player.src === "") break; // Aborted
+      if (player.src === "") break;
       currentVol += volStep;
       player.volume = Math.max(0, Math.min(1, currentVol));
       await new Promise((r) => setTimeout(r, interval));
@@ -589,22 +562,33 @@ class AudioEngine {
   }
 
   setSleepTimer(minutes) {
-    if (this.sleepTimer) clearTimeout(this.sleepTimer);
+    if (this._sleepInterval) {
+      clearInterval(this._sleepInterval);
+      this._sleepInterval = null;
+    }
+
     if (minutes <= 0) {
-      this.sleepTimer = null;
       this._emit("sleeptimer", { remaining: 0 });
       return;
     }
 
-    const ms = minutes * 60 * 1000;
-    this.sleepTimer = setTimeout(() => {
-      this.pause();
-      this.sleepTimer = null;
-      this._emit("sleeptimer", { remaining: 0 });
-      this._emit("toast", { message: "Sleep timer triggered. Goodnight! 💤" });
-    }, ms);
+    let remainingMs = minutes * 60 * 1000;
+    this._emit("sleeptimer", { remaining: remainingMs });
 
-    this._emit("sleeptimer", { remaining: minutes });
+    this._sleepInterval = setInterval(() => {
+      remainingMs -= 1000;
+      if (remainingMs <= 0) {
+        clearInterval(this._sleepInterval);
+        this._sleepInterval = null;
+        this.pause();
+        this._emit("sleeptimer", { remaining: 0 });
+        this._emit("toast", {
+          message: "Sleep timer triggered. Goodnight! 💤",
+        });
+      } else {
+        this._emit("sleeptimer", { remaining: remainingMs });
+      }
+    }, 1000);
   }
 
   toggleRepeat() {
@@ -647,6 +631,27 @@ class AudioEngine {
     this.minTrackDuration = seconds;
     localStorage.setItem("flow_min_duration", seconds.toString());
     this._emit("library_filter_change");
+  }
+
+  setMonoMode(enabled) {
+    this.monoMode = enabled;
+    localStorage.setItem("flow_mono_mode", enabled.toString());
+
+    if (enabled) {
+      this._ensureAudioContext();
+    }
+
+    if (this.audioCtx) {
+      if (enabled) {
+        this.audioCtx.destination.channelCount = 1;
+        this.audioCtx.destination.channelCountMode = "explicit";
+        this.audioCtx.destination.channelInterpretation = "speakers";
+      } else {
+        this.audioCtx.destination.channelCount = 2;
+        this.audioCtx.destination.channelCountMode = "max";
+        this.audioCtx.destination.channelInterpretation = "speakers";
+      }
+    }
   }
 
   _handleTrackEnd() {

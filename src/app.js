@@ -140,6 +140,46 @@ export async function initApp() {
     </div>
   `;
 
+  const savedAccent = localStorage.getItem("flow_accent_color");
+  if (savedAccent) {
+    document.documentElement.style.setProperty("--accent", savedAccent);
+    document.documentElement.style.setProperty("--accent-hover", savedAccent);
+
+    const hexToRgb = (hex) => {
+      var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+      return result
+        ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
+        : "29, 185, 84";
+    };
+    document.documentElement.style.setProperty(
+      "--accent-rgb",
+      hexToRgb(savedAccent),
+    );
+  }
+
+  const savedBg = localStorage.getItem("flow_custom_bg");
+  if (savedBg) {
+    document.body.style.backgroundImage = `url('${savedBg}')`;
+    document.body.style.backgroundSize = "cover";
+    document.body.style.backgroundPosition = "center";
+    document.body.style.backgroundAttachment = "fixed";
+
+    let overlay = document.getElementById("bg-overlay");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.id = "bg-overlay";
+      overlay.style.position = "fixed";
+      overlay.style.top = "0";
+      overlay.style.left = "0";
+      overlay.style.width = "100%";
+      overlay.style.height = "100%";
+      overlay.style.background = "rgba(0,0,0,0.7)";
+      overlay.style.zIndex = "-1";
+      overlay.style.pointerEvents = "none";
+      document.body.appendChild(overlay);
+    }
+  }
+
   if (Capacitor.isNativePlatform()) {
     StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
     StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
@@ -151,9 +191,7 @@ export async function initApp() {
           "NowPlaying",
         );
         NowPlaying.requestPermissions().catch(() => {});
-      } catch (e) {
-        // Plugin not available, ignore
-      }
+      } catch (e) {}
     }
   }
 
@@ -213,9 +251,23 @@ export async function initApp() {
     updateSidebarPlaylists(musicLibrary);
   });
 
+  let hasCountedPlay = false;
+
   audioEngine.on("trackchange", ({ track }) => {
     musicLibrary.addToRecent(track.id);
-    musicLibrary.incrementPlayCount(track.id);
+    hasCountedPlay = false;
+  });
+
+  audioEngine.on("timeupdate", ({ currentTime, duration }) => {
+    if (hasCountedPlay || !audioEngine.isPlaying) return;
+    const threshold = Math.min(30, duration * 0.5);
+
+    if (currentTime >= threshold) {
+      if (audioEngine.currentTrack) {
+        musicLibrary.incrementPlayCount(audioEngine.currentTrack.id);
+        hasCountedPlay = true;
+      }
+    }
   });
 
   router.register("#/", () => renderHome(mainContent));

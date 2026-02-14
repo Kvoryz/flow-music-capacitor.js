@@ -100,14 +100,33 @@ export function renderPlaylist(container, params) {
 
   if (tracks.length > 0) {
     renderTrackList(tracks, page.querySelector("#playlist-tracks"));
+
+    const addMoreBtn = createElement("button", "btn btn-secondary");
+    addMoreBtn.style.margin = "var(--sp-4) auto";
+    addMoreBtn.style.display = "block";
+    addMoreBtn.textContent = "Add More Songs";
+    addMoreBtn.addEventListener("click", () => {
+      store.set("modal", {
+        type: "add-tracks",
+        data: { playlistId: playlist.id },
+      });
+    });
+    page.querySelector("#playlist-tracks").appendChild(addMoreBtn);
   } else {
     page.querySelector("#playlist-tracks").innerHTML = `
       <div class="empty-state">
         <div class="empty-state-icon">${icons.music}</div>
         <div class="empty-state-title">Empty playlist</div>
-        <div class="empty-state-text">Add songs to this playlist from the context menu</div>
+        <div class="empty-state-text">Start building your collection</div>
+        <button class="btn btn-primary" id="empty-add-songs-btn" style="margin-top: var(--sp-4);">Add Songs</button>
       </div>
     `;
+    page.querySelector("#empty-add-songs-btn").addEventListener("click", () => {
+      store.set("modal", {
+        type: "add-tracks",
+        data: { playlistId: playlist.id },
+      });
+    });
   }
 }
 
@@ -130,11 +149,6 @@ function showCoverPicker(playlist, tracks) {
     }
   });
 
-  if (covers.length === 0) {
-    store.showToast("No album art available");
-    return;
-  }
-
   const wrapper = document.getElementById("modal-wrapper");
   if (!wrapper) return;
 
@@ -143,6 +157,15 @@ function showCoverPicker(playlist, tracks) {
     <div class="modal-overlay">
       <div class="modal" style="max-height: 80vh; overflow-y: auto;">
         <div class="modal-title">Choose Cover</div>
+        
+        <div style="margin-bottom: var(--sp-4);">
+            <button class="btn btn-secondary" id="gallery-pick-btn" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <svg viewBox="0 0 24 24" fill="currentColor" style="width: 20px; height: 20px;"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                Choose from Gallery
+            </button>
+            <input type="file" id="cover-file-input" accept="image/*" style="display: none;">
+        </div>
+
         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 8px 0;">
           ${covers
             .slice(0, 30)
@@ -164,6 +187,27 @@ function showCoverPicker(playlist, tracks) {
       wrapper.style.display = "none";
       wrapper.innerHTML = "";
     }
+  });
+
+  const fileInput = wrapper.querySelector("#cover-file-input");
+  wrapper.querySelector("#gallery-pick-btn").addEventListener("click", () => {
+    fileInput.click();
+  });
+
+  fileInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      musicLibrary.updatePlaylistCover(playlist.id, reader.result);
+      store.showToast("Cover updated! 🎨");
+      wrapper.style.display = "none";
+      wrapper.innerHTML = "";
+      const container = document.getElementById("main-content");
+      if (container) renderPlaylist(container, { id: playlist.id });
+    };
+    reader.readAsDataURL(file);
   });
 
   wrapper.querySelectorAll(".cover-picker-item").forEach((item) => {

@@ -21,8 +21,6 @@ class HapticEngine {
   async impact(style = ImpactStyle.Light) {
     if (!this.enabled || this.intensity < 0.2) return;
     try {
-      // For simplicity on web/native, we'll map intensity to style if not using raw vibrate
-      // On some platforms, raw vibrate(ms) works better for intensity control
       await Haptics.impact({ style });
     } catch (e) {}
   }
@@ -42,16 +40,10 @@ class HapticEngine {
     } catch (e) {}
   }
 
-  /**
-   * Short tactile pulse for button clicks
-   */
   light() {
     this.impact(ImpactStyle.Light);
   }
 
-  /**
-   * Medium tactile pulse for toggle switches or success
-   */
   medium() {
     this.impact(ImpactStyle.Medium);
   }

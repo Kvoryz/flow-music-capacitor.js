@@ -12,7 +12,7 @@ export async function getDominantColor(imgSrc) {
     img.onload = () => {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
-      canvas.width = 10; // Small size for faster processing
+      canvas.width = 10;
       canvas.height = 10;
       ctx.drawImage(img, 0, 0, 10, 10);
       const data = ctx.getImageData(0, 0, 10, 10).data;
@@ -33,7 +33,7 @@ export async function getDominantColor(imgSrc) {
         b: Math.round(b / count),
       });
     };
-    img.onerror = () => resolve({ r: 29, g: 185, b: 84 }); // Default Spotify green
+    img.onerror = () => resolve({ r: 29, g: 185, b: 84 });
   });
 }
 
@@ -56,21 +56,15 @@ export function debounce(fn, delay = 300) {
   };
 }
 
-/**
- * Strips junk like "(Official Video)", "[Lyrics]", etc. and truncates.
- */
 export function cleanTitle(title, maxLength = 35) {
   if (!title) return "";
 
   let cleaned = title
-    // Remove (Official...), [Official...], (Lyric...), [Lyric...]
     .replace(
       /[\(\[][^\]\)]*(Official|Lyric|Video|Audio|HD|4K)[^\]\)]*[\)\]]/gi,
       "",
     )
-    // Remove (feat. ...), (with ...), [feat. ...]
     .replace(/[\(\[][^\]\)]*(feat|with)[^\]\)]*[\)\]]/gi, "")
-    // Remove trailing dashes/spaces
     .trim()
     .replace(/\s*-\s*$/, "")
     .trim();

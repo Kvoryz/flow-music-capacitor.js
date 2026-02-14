@@ -25,15 +25,10 @@ class Library {
     );
   }
 
-  /**
-   * Initialize by loading cached library first, then scanning if needed.
-   * Should be called once at app startup.
-   */
   async init() {
     if (this._initialized) return;
     this._initialized = true;
 
-    // Try to load from cache first (instant startup)
     const cached = this._loadCachedLibrary();
     if (cached && cached.tracks && cached.tracks.length > 0) {
       this.tracks = cached.tracks;
@@ -50,17 +45,15 @@ class Library {
       if (this.autoScan) {
         this.rescan().catch(() => {});
       }
-      return; // Use cached data, no re-scan needed
+      return;
     }
 
-    // No cache: perform a full scan
     try {
       const result = await scanner.scan();
       let allTracks = result.tracks || [];
       let allAlbums = result.albums || [];
       let allArtists = result.artists || [];
 
-      // Scan custom folders
       for (const folder of this._scannedFolders) {
         try {
           const folderResult = await scanner.scanFolder(folder.uri);
@@ -78,7 +71,7 @@ class Library {
         this.artists = allArtists;
         this._enrichAlbums();
         this._enrichArtists();
-        this._saveCachedLibrary(); // Logic consolidated inside
+        this._saveCachedLibrary();
         this._emit("updated", {
           tracks: this.tracks.length,
           albums: this.albums.length,
@@ -91,7 +84,6 @@ class Library {
   }
 
   _enrichAlbums() {
-    // Build trackIds for albums if not present
     this.albums.forEach((album) => {
       if (!album.trackIds || album.trackIds.length === 0) {
         album.trackIds = this.tracks
@@ -99,7 +91,6 @@ class Library {
           .map((t) => t.id);
       }
     });
-    // Build artistId for albums if missing
     this.albums.forEach((album) => {
       if (!album.artistId) {
         const firstTrack = this.tracks.find((t) => t.albumId === album.id);
@@ -127,9 +118,7 @@ class Library {
           savedAt: Date.now(),
         }),
       );
-    } catch {
-      /* storage full */
-    }
+    } catch {}
   }
 
   _loadCachedLibrary() {
@@ -141,9 +130,6 @@ class Library {
     }
   }
 
-  /**
-   * Let user pick a folder and scan it
-   */
   async pickAndScanFolder() {
     try {
       const folder = await scanner.chooseFolder();
@@ -151,7 +137,6 @@ class Library {
 
       const path = folder.folderUri;
 
-      // Check for overlaps (subfolders or parent folders)
       const existing = this._scannedFolders.find(
         (f) => path.startsWith(f.uri) || f.uri.startsWith(path),
       );
@@ -195,6 +180,51 @@ class Library {
     }
   }
 
+  async addScanDirectory(path) {
+    const existing = this._scannedFolders.find(
+      (f) => path.startsWith(f.uri) || f.uri.startsWith(path),
+    );
+    if (existing) {
+      if (existing.uri === path) {
+        this._emit("toast", { message: "Folder already added" });
+      } else {
+        this._emit("toast", {
+          message: "Folder overlaps with an existing one",
+        });
+      }
+      return;
+    }
+
+    const folderName = path.split("/").pop() || "Folder";
+    this._scannedFolders.push({
+      uri: path,
+      name: folderName,
+    });
+    this._saveScannedFolders();
+
+    try {
+      const result = await scanner.scanFolder(path);
+      if (result) {
+        this._mergeResults(result);
+        this._enrichAlbums();
+        this._enrichArtists();
+        this._saveCachedLibrary();
+
+        this._emit("updated", {
+          tracks: this.tracks.length,
+          albums: this.albums.length,
+          artists: this.artists.length,
+        });
+        this._emit("toast", { message: "Scan complete! \uD83C\uDFB5" });
+        return true;
+      }
+    } catch (e) {
+      console.error("Manual scan failed:", e);
+      this._emit("toast", { message: "Could not scan folder" });
+    }
+    return false;
+  }
+
   getScannedFolders() {
     return this._scannedFolders;
   }
@@ -220,9 +250,6 @@ class Library {
     );
   }
 
-  /**
-   * Centralized merging logic to ensure tracks, albums, and artists are synced.
-   */
   _mergeResults(
     result,
     targetTracks = this.tracks,
@@ -231,7 +258,6 @@ class Library {
   ) {
     if (!result) return;
 
-    // Merge tracks
     if (result.tracks) {
       result.tracks.forEach((t) => {
         if (!targetTracks.find((ex) => ex.id === t.id)) {
@@ -240,7 +266,6 @@ class Library {
       });
     }
 
-    // Merge albums
     if (result.albums) {
       result.albums.forEach((a) => {
         if (!targetAlbums.find((ex) => ex.id === a.id)) {
@@ -249,7 +274,6 @@ class Library {
       });
     }
 
-    // Merge artists
     if (result.artists) {
       result.artists.forEach((ar) => {
         if (!targetArtists.find((ex) => ex.id === ar.id)) {
@@ -259,9 +283,6 @@ class Library {
     }
   }
 
-  /**
-   * Force rescan music from device with cache clear
-   */
   async rescan() {
     localStorage.removeItem("flow_library_cache");
     localStorage.removeItem("zplayer_scan_cache");
@@ -275,8 +296,6 @@ class Library {
   }
 
   clearMetadataCache() {
-    // Keep tracks but clear albums/artists to force rebuild?
-    // Or just a full rescan. Let's provide a clear toast feedback.
     localStorage.removeItem("flow_library_cache");
     localStorage.removeItem("zplayer_scan_cache");
     this._emit("toast", { message: "Metadata cache cleared." });
@@ -305,12 +324,8 @@ class Library {
     return this.tracks.filter((t) => t.artistId === artistId);
   }
 
-  /**
-   * Add a track from an external source (like YouTube search results)
-   */
   addExternalTrack(track) {
     if (!this.tracks.find((t) => t.id === track.id)) {
-      // Ensure it has basic fields
       const newTrack = {
         ...track,
         id: track.id || `ext_${Date.now()}`,
@@ -321,7 +336,6 @@ class Library {
 
       this.tracks.push(newTrack);
 
-      // Ensure "YouTube" artist/album exist in memory
       if (!this.artists.find((a) => a.id === newTrack.artistId)) {
         this.artists.push({
           id: newTrack.artistId,
@@ -346,9 +360,6 @@ class Library {
     return this.tracks.find((t) => t.id === track.id);
   }
 
-  /**
-   * Sort tracks by various criteria
-   */
   sortTracks(tracks, criterion = "title", ascending = true) {
     const sorted = [...tracks].sort((a, b) => {
       let valA, valB;
@@ -512,10 +523,8 @@ class Library {
   }
 
   getArtistCover(artistId) {
-    // Use first album cover from this artist as their image
     const album = this.albums.find((a) => a.artistId === artistId && a.cover);
     if (album) return album.cover;
-    // Fallback: first track cover
     const track = this.tracks.find((t) => t.artistId === artistId && t.cover);
     return track ? track.cover : "";
   }
@@ -595,7 +604,6 @@ class Library {
 
   getForgottenTracks(limit = 20) {
     const counts = this._loadPlayCounts();
-    // Prioritize tracks with 0 plays, then tracks with fewest plays
     return [...this.tracks]
       .map((t) => ({ ...t, plays: counts[t.id] || 0 }))
       .sort((a, b) => a.plays - b.plays)
@@ -606,6 +614,11 @@ class Library {
     if (this.albums.length === 0) return null;
     const idx = Math.floor(Math.random() * this.albums.length);
     return this.albums[idx];
+  }
+
+  getRandomAlbums(limit = 10) {
+    if (this.albums.length === 0) return [];
+    return [...this.albums].sort(() => 0.5 - Math.random()).slice(0, limit);
   }
 
   getMostPlayed(limit = 20) {
