@@ -1,4 +1,5 @@
 import { Capacitor } from "@capacitor/core";
+import { App } from "@capacitor/app";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import { icons } from "./core/icons.js";
 import { router } from "./router.js";
@@ -226,18 +227,6 @@ export async function initApp() {
   appEl.appendChild(createModal());
   appEl.appendChild(createToast());
 
-  import("./components/equalizer.js").then(({ createEqualizer }) => {
-    const eqPanel = createEqualizer();
-    appEl.appendChild(eqPanel);
-
-    store.on("eqOpen", (open) => {
-      eqPanel.classList.toggle("open", open);
-      if (open && audioEngine.audioCtx) {
-        audioEngine.audioCtx.resume().catch(() => {});
-      }
-    });
-  });
-
   const mainContent = appEl.querySelector("#main-content");
 
   appEl.querySelectorAll("[data-route]").forEach((item) => {
@@ -318,6 +307,14 @@ export async function initApp() {
       store.showToast("No music found on device.");
     }
   });
+
+  if (Capacitor.getPlatform() !== "web") {
+    App.addListener("appStateChange", ({ isActive }) => {
+      if (isActive && musicLibrary.autoScan) {
+        musicLibrary.rescanHidden().catch(() => {});
+      }
+    });
+  }
 }
 
 function showOnboardingModal() {

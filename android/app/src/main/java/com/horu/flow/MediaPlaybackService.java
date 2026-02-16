@@ -7,7 +7,10 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.ContentResolver;
 import android.content.ContentUris;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.media.MediaMetadataRetriever;
@@ -48,6 +51,7 @@ public class MediaPlaybackService extends Service {
     private long currentPosition = 0;
     private long currentDuration = 0;
     private String lastCoverKey = "";
+    private BroadcastReceiver headsetReceiver;
 
     @Override
     public void onCreate() {
@@ -95,6 +99,21 @@ public class MediaPlaybackService extends Service {
         });
 
         mediaSession.setActive(true);
+
+        headsetReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (Intent.ACTION_HEADSET_PLUG.equals(intent.getAction())) {
+                    int state = intent.getIntExtra("state", -1);
+                    if (state == 0) {
+                        broadcastAction("headsetDisconnected");
+                    } else if (state == 1) {
+                        broadcastAction("headsetConnected");
+                    }
+                }
+            }
+        };
+        registerReceiver(headsetReceiver, new IntentFilter(Intent.ACTION_HEADSET_PLUG));
     }
 
     /**
@@ -353,6 +372,9 @@ public class MediaPlaybackService extends Service {
         if (mediaSession != null) {
             mediaSession.setActive(false);
             mediaSession.release();
+        }
+        if (headsetReceiver != null) {
+            unregisterReceiver(headsetReceiver);
         }
         super.onDestroy();
     }

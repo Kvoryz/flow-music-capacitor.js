@@ -82,19 +82,21 @@ export function createNowPlaying() {
   });
 
   el.querySelector("#np-shuffle").addEventListener("click", () => {
-    queueManager.toggleShuffle();
-    const enabled = audioEngine.shuffleMode;
-    store.showToast(enabled ? "Shuffle On 🔀" : "Shuffle Off");
+    const enabled = queueManager.toggleShuffle();
+    store.showToast(enabled ? "Shuffle On 🔀 (Repeat Off)" : "Shuffle Off");
   });
 
   el.querySelector("#np-repeat").addEventListener("click", () => {
-    const mode = audioEngine.toggleRepeat();
-    const labels = {
-      off: "Repeat Off",
-      all: "Repeat All 🔁",
-      one: "Repeat One 🔂",
-    };
-    store.showToast(labels[mode] || "Repeat Off");
+    const mode = queueManager.toggleRepeat();
+    const isStopAfter = audioEngine.stopAfterCurrent;
+
+    let message = "";
+    if (mode === "off" && isStopAfter) message = "Play Once (Current) ⏹️";
+    else if (mode === "off" && !isStopAfter) message = "Play to End 🏁";
+    else if (mode === "all") message = "Repeat All 🔁";
+    else if (mode === "one") message = "Repeat One 🔂";
+
+    store.showToast(message);
   });
 
   el.querySelector("#np-like").addEventListener("click", () => {
@@ -203,10 +205,16 @@ export function createNowPlaying() {
       `control-btn${enabled ? " active" : ""}`;
   });
 
-  audioEngine.on("repeatchange", ({ mode }) => {
+  audioEngine.on("repeatchange", ({ mode, stopAfterCurrent }) => {
     const btn = el.querySelector("#np-repeat");
-    btn.className = `control-btn${mode !== "off" ? " active" : ""}`;
-    btn.innerHTML = mode === "one" ? icons.repeatOne : icons.repeat;
+    const isActive = mode !== "off" || stopAfterCurrent;
+    btn.className = `control-btn${isActive ? " active" : ""}`;
+
+    if (mode === "one") {
+      btn.innerHTML = icons.repeatOne;
+    } else {
+      btn.innerHTML = icons.repeat;
+    }
   });
 
   audioEngine.on("sleeptimer", ({ remaining }) => {

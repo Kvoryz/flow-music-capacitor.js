@@ -78,8 +78,45 @@ class Library {
           artists: this.artists.length,
         });
       }
+
+      setInterval(
+        () => {
+          if (this.autoScan) {
+            this.rescanHidden().catch(() => {});
+          }
+        },
+        5 * 60 * 1000,
+      );
     } catch (err) {
       console.warn("Library init scan failed, using demo data:", err);
+    }
+  }
+
+  async rescanHidden() {
+    try {
+      const result = await scanner.scan();
+      let allTracks = result.tracks || [];
+      let allAlbums = result.albums || [];
+      let allArtists = result.artists || [];
+
+      for (const folder of this._scannedFolders) {
+        const folderResult = await scanner.scanFolder(folder.uri);
+        if (folderResult) {
+          this._mergeResults(folderResult, allTracks, allAlbums, allArtists);
+        }
+      }
+
+      if (allTracks.length !== this.tracks.length) {
+        this.tracks = allTracks;
+        this.albums = allAlbums;
+        this.artists = allArtists;
+        this._enrichAlbums();
+        this._enrichArtists();
+        this._saveCachedLibrary();
+        this._emit("updated");
+      }
+    } catch (e) {
+      console.warn("Auto-rescan failed:", e);
     }
   }
 

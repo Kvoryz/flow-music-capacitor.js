@@ -184,6 +184,8 @@ function renderLuckyDip(album) {
           box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
           display: flex;
           align-items: center;
+          transform: translateZ(0);
+          backface-visibility: hidden;
         }
 
         .lucky-dip-bg {
@@ -231,7 +233,10 @@ function renderLuckyDip(album) {
           letter-spacing: 0.1em;
           margin-bottom: var(--sp-4);
           backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
           border: 1px solid rgba(var(--dip-accent-rgb, var(--accent-rgb)), 0.3);
+          transform: translateZ(0);
+          backface-visibility: hidden;
         }
 
         .lucky-dip-title {

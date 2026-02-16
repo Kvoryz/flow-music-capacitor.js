@@ -16,10 +16,9 @@ class QueueManager {
       console.log(
         `Transitioning to: ${nextTrack ? nextTrack.title : "unknown"} (Index: ${this.currentIndex})`,
       );
+
       if (this.currentIndex < this.queue.length - 1) {
         this.currentIndex++;
-      } else if (audioEngine.repeatMode === "all") {
-        this.currentIndex = 0;
       }
 
       this._syncPreload();
@@ -138,15 +137,14 @@ class QueueManager {
     if (this.currentIndex < this.queue.length - 1) {
       this.currentIndex++;
       this._playCurrentTrack();
-    } else if (audioEngine.repeatMode === "all") {
-      this.currentIndex = 0;
-      if (audioEngine.shuffleMode) {
-        this.queue = this._shuffle([...this.originalQueue]);
-      }
-      this._playCurrentTrack();
     } else {
-      audioEngine.pause();
-      this._emit("queueend");
+      if (audioEngine.repeatMode === "all" && this.queue.length > 0) {
+        this.currentIndex = 0;
+        this._playCurrentTrack();
+      } else {
+        audioEngine.pause();
+        this._emit("queueend");
+      }
     }
   }
 
@@ -159,11 +157,13 @@ class QueueManager {
     if (this.currentIndex > 0) {
       this.currentIndex--;
       this._playCurrentTrack();
-    } else if (audioEngine.repeatMode === "all") {
-      this.currentIndex = this.queue.length - 1;
-      this._playCurrentTrack();
     } else {
-      audioEngine.seek(0);
+      if (audioEngine.repeatMode === "all" && this.queue.length > 0) {
+        this.currentIndex = this.queue.length - 1;
+        this._playCurrentTrack();
+      } else {
+        audioEngine.seek(0);
+      }
     }
   }
 
@@ -172,7 +172,22 @@ class QueueManager {
   }
 
   getUpcoming() {
-    return this.queue.slice(this.currentIndex + 1);
+    if (this.queue.length === 0) return [];
+
+    const upcoming = [];
+    const len = this.queue.length;
+
+    for (let i = this.currentIndex + 1; i < len; i++) {
+      upcoming.push({ ...this.queue[i], queueIndex: i });
+    }
+
+    if (audioEngine.repeatMode === "all") {
+      for (let i = 0; i < this.currentIndex; i++) {
+        upcoming.push({ ...this.queue[i], queueIndex: i });
+      }
+    }
+
+    return upcoming;
   }
 
   toggleShuffle() {
@@ -189,6 +204,13 @@ class QueueManager {
       }
     }
     this._emit("queuechange");
+    return enabled;
+  }
+
+  toggleRepeat() {
+    const mode = audioEngine.toggleRepeat();
+    this._emit("queuechange");
+    return mode;
   }
 
   _shuffle(arr, startIndex, keepFirst) {
@@ -231,8 +253,6 @@ class QueueManager {
     const nextIndex = this.currentIndex + 1;
     if (nextIndex < this.queue.length) {
       audioEngine.preloadNext(this.queue[nextIndex]);
-    } else if (audioEngine.repeatMode === "all" && this.queue.length > 0) {
-      audioEngine.preloadNext(this.queue[0]);
     } else {
       audioEngine.preloadNext(null);
     }

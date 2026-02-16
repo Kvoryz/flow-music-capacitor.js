@@ -25,6 +25,7 @@ export function renderQueue(container) {
       queueManager.off("queuechange", updateQueueUI);
       queueManager.off("trackchange", updateQueueUI);
       audioEngine.off("shufflechange", updateQueueUI);
+      audioEngine.off("repeatchange", updateQueueUI);
       return;
     }
     const content = page.querySelector("#queue-content");
@@ -40,6 +41,7 @@ export function renderQueue(container) {
   queueManager.on("queuechange", updateQueueUI);
   queueManager.on("trackchange", updateQueueUI);
   audioEngine.on("shufflechange", updateQueueUI);
+  audioEngine.on("repeatchange", updateQueueUI);
   musicLibrary.on("updated", updateQueueUI);
 
   page.querySelector("#clear-queue-btn").addEventListener("click", () => {
@@ -55,21 +57,62 @@ function renderQueueContent(contentEl) {
 
   const current = queueManager.getCurrentTrack();
   const upcoming = queueManager.getUpcoming();
+  const isShuffle = audioEngine.shuffleMode;
+  const repeatMode = audioEngine.repeatMode;
+  const isStopAfter = audioEngine.stopAfterCurrent;
+
+  // Mode Bar
+  const modeBar = createElement("div", "queue-mode-bar");
+
+  const shuffleBtn = createElement(
+    "button",
+    `control-btn${isShuffle ? " active" : ""}`,
+  );
+  shuffleBtn.innerHTML = icons.shuffle;
+  shuffleBtn.addEventListener("click", () => {
+    queueManager.toggleShuffle();
+    haptics.light();
+  });
+
+  const repeatBtn = createElement(
+    "button",
+    `control-btn${repeatMode !== "off" || isStopAfter ? " active" : ""}`,
+  );
+  repeatBtn.innerHTML = repeatMode === "one" ? icons.repeatOne : icons.repeat;
+  repeatBtn.addEventListener("click", () => {
+    queueManager.toggleRepeat();
+    haptics.light();
+  });
+
+  let modeText = "Play to End 🏁";
+  if (isShuffle) modeText = "Shuffle On 🔀";
+  else if (isStopAfter) modeText = "Play Once ⏹️";
+  else if (repeatMode === "all") modeText = "Repeat All 🔁";
+  else if (repeatMode === "one") modeText = "Repeat One 🔂";
+
+  const statusText = createElement("span", "queue-mode-text");
+  statusText.textContent = modeText;
+
+  modeBar.appendChild(shuffleBtn);
+  modeBar.appendChild(repeatBtn);
+  modeBar.appendChild(statusText);
+  contentEl.appendChild(modeBar);
 
   if (!current && upcoming.length === 0) {
-    contentEl.innerHTML = `
-      <div style="text-align: center; padding: var(--sp-10) 0; color: var(--text-tertiary);">
-        <div style="font-size: 48px; margin-bottom: var(--sp-4);">${icons.queue}</div>
-        <p style="font-size: var(--fs-lg);">Queue is empty</p>
-        <p style="font-size: var(--fs-sm);">Play something to get started</p>
-      </div>
+    const empty = createElement("div", "empty-state");
+    empty.style.padding = "40px 0";
+    empty.innerHTML = `
+        <div class="empty-state-icon">${icons.queue}</div>
+        <div class="empty-state-title">Queue is empty</div>
+        <div class="empty-state-text">Play something to get started</div>
     `;
+    contentEl.appendChild(empty);
     return;
   }
 
   if (current) {
     const nowSection = createElement("div", "");
-    nowSection.innerHTML = `<h3 style="font-size: var(--fs-sm); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: var(--sp-3);">Now Playing</h3>`;
+    nowSection.innerHTML = `<h3 class="settings-group-title" style="padding-left: 0; padding-top: 0;">Now Playing</h3>`;
     const item = createQueueItem(current, queueManager.currentIndex, true);
     nowSection.appendChild(item);
     contentEl.appendChild(nowSection);
@@ -77,16 +120,31 @@ function renderQueueContent(contentEl) {
 
   if (upcoming.length > 0) {
     const nextSection = createElement("div", "");
-    nextSection.style.marginTop = "var(--sp-6)";
-    nextSection.innerHTML = `<h3 style="font-size: var(--fs-sm); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: var(--sp-3);">Up Next · ${upcoming.length} tracks</h3>`;
+    nextSection.style.marginTop = "24px";
+    nextSection.style.opacity = isStopAfter ? "0.4" : "1";
 
-    upcoming.forEach((track, i) => {
-      const queueIndex = queueManager.currentIndex + 1 + i;
-      const item = createQueueItem(track, queueIndex, false);
+    const header = createElement("div", "");
+    header.style.cssText =
+      "display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;";
+    header.innerHTML = `
+      <h3 class="settings-group-title" style="padding: 0;">Up Next · ${upcoming.length} tracks</h3>
+      ${isStopAfter ? '<span class="stop-badge">STOP AFTER THIS</span>' : ""}
+    `;
+
+    nextSection.appendChild(header);
+
+    upcoming.forEach((track) => {
+      const item = createQueueItem(track, track.queueIndex, false);
       nextSection.appendChild(item);
     });
 
     contentEl.appendChild(nextSection);
+  }
+
+  if (repeatMode === "all" && upcoming.length > 0) {
+    const footer = createElement("div", "queue-footer");
+    footer.innerHTML = `${icons.repeat} Back to start of queue`;
+    contentEl.appendChild(footer);
   }
 }
 

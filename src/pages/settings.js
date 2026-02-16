@@ -26,15 +26,6 @@ export function renderSettings(container) {
       <div class="settings-group-title">Audio</div>
       <div class="settings-group-card">
         
-        <!-- Equalizer -->
-        <div class="setting-row clickable" id="open-eq-btn">
-          <div class="setting-icon">${icons.equalizer}</div>
-          <div class="setting-content">
-            <span class="setting-title">Equalizer</span>
-            <span class="setting-subtitle">Professional frequency control</span>
-          </div>
-          <div class="setting-action">${icons.chevronRight}</div>
-        </div>
 
         <!-- Crossfade -->
         <div class="setting-row">
@@ -46,20 +37,6 @@ export function renderSettings(container) {
                <input type="range" id="crossfade-slider" min="0" max="12" step="0.5" value="${audioEngine.crossfadeDuration}" class="premium-range" style="margin-top:8px;">
             </div>
           </div>
-        </div>
-
-        <!-- Mono Audio -->
-        <div class="setting-row">
-           <div class="setting-icon" style="opacity:0.7">${icons.volume || icons.settings}</div>
-           <div class="setting-content">
-             <span class="setting-title">Mono Mode</span>
-             <span class="setting-subtitle">Combine audio channels</span>
-           </div>
-           <div class="setting-action">
-             <div class="premium-toggle ${audioEngine.monoMode ? "active" : ""}" id="mono-toggle">
-               <div class="toggle-thumb"></div>
-             </div>
-           </div>
         </div>
 
       </div>
@@ -104,20 +81,6 @@ export function renderSettings(container) {
       <div class="settings-group-title">Playback</div>
       <div class="settings-group-card">
         
-        <!-- Sleep Timer -->
-         <div class="setting-row">
-            <div class="setting-icon">${icons.clock || icons.settings}</div>
-            <div class="setting-content">
-               <span class="setting-title">Sleep Timer</span>
-               <span class="setting-subtitle" id="sleep-timer-status">Off</span>
-               <div class="timer-presets" style="margin-top:8px;">
-                  <button class="timer-chip" data-min="0">Off</button>
-                  <button class="timer-chip" data-min="15">15m</button>
-                  <button class="timer-chip" data-min="30">30m</button>
-                  <button class="timer-chip" data-min="60">1h</button> 
-               </div>
-            </div>
-         </div>
 
         <div class="setting-row">
            <div class="setting-icon">${icons.play || icons.settings}</div>
@@ -253,7 +216,6 @@ export function renderSettings(container) {
     });
   };
 
-  setupToggle("mono-toggle", (val) => audioEngine.setMonoMode(val));
   setupToggle("pause-disconnect-toggle", (val) =>
     audioEngine.setPauseOnDisconnect(val),
   );
@@ -350,80 +312,8 @@ export function renderSettings(container) {
         .forEach((s) => s.classList.remove("active"));
       swatch.classList.add("active");
 
-      document.documentElement.style.setProperty("--accent", color);
-      document.documentElement.style.setProperty("--accent-hover", color);
-
-      const hexToRgb = (hex) => {
-        var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-        return result
-          ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
-          : "29, 185, 84";
-      };
-      document.documentElement.style.setProperty(
-        "--accent-rgb",
-        hexToRgb(color),
-      );
-
-      localStorage.setItem("flow_accent_color", color);
+      audioEngine.setAccentColor(color);
       store.showToast("Theme updated");
-    });
-  });
-
-  const timerStatus = page.querySelector("#sleep-timer-status");
-  const updateTimerDisplay = ({ remaining }) => {
-    if (!remaining || remaining <= 0) {
-      if (timerStatus) {
-        timerStatus.textContent = "Off";
-        timerStatus.style.color = "inherit";
-      }
-      page
-        .querySelectorAll(".timer-chip")
-        .forEach((c) => c.classList.remove("active"));
-      page.querySelector('.timer-chip[data-min="0"]')?.classList.add("active");
-    } else {
-      const totalSec = Math.ceil(remaining / 1000);
-      const m = Math.floor(totalSec / 60);
-      const s = totalSec % 60;
-      const txt = `${m}:${s.toString().padStart(2, "0")}`;
-      if (timerStatus) {
-        timerStatus.textContent = `${txt}`;
-        timerStatus.style.color = "var(--accent)";
-      }
-
-      const currentMin = Math.round(remaining / 60000);
-      page.querySelectorAll(".timer-chip").forEach((c) => {
-        const chipMin = parseInt(c.dataset.min);
-        c.classList.toggle("active", chipMin === currentMin);
-      });
-    }
-  };
-  audioEngine.on("sleeptimer", updateTimerDisplay);
-
-  const chips = page.querySelectorAll(".timer-chip");
-  chips.forEach((chip) => {
-    const currentMin = Math.round(audioEngine.sleepTimerRemaining / 60000);
-    if (
-      parseInt(chip.dataset.min) === currentMin ||
-      (currentMin === 0 && chip.dataset.min === "0")
-    ) {
-      chip.classList.add("active");
-    }
-
-    chip.addEventListener("click", () => {
-      haptics.light();
-      chips.forEach((c) => c.classList.remove("active"));
-      chip.classList.add("active");
-
-      const min = parseInt(chip.dataset.min);
-      if (min === 0) {
-        audioEngine.stopSleepTimer();
-        if (timerStatus) {
-          timerStatus.textContent = "Off";
-          timerStatus.style.color = "inherit";
-        }
-      } else {
-        audioEngine.startSleepTimer(min);
-      }
     });
   });
 
@@ -443,7 +333,6 @@ export function renderSettings(container) {
           "zplayer_favorites",
           "zplayer_playlists",
         ].forEach((k) => localStorage.removeItem(k));
-        audioEngine.setMonoMode(false);
         audioEngine.setCrossfade(0);
         audioEngine.setPauseOnDisconnect(true);
         audioEngine.setPlayOnConnect(false);

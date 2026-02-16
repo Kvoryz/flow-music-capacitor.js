@@ -56,10 +56,14 @@ function renderHomeContent(page) {
     heroCard.style.gap = "var(--sp-6)";
     heroCard.style.cursor = "pointer";
     heroCard.style.transition = "transform 0.2s ease";
-    heroCard.style.background = "rgba(255, 255, 255, 0.03)";
-    heroCard.style.backdropFilter = "blur(10px)";
-    heroCard.style.webkitBackdropFilter = "blur(10px)";
-    heroCard.style.border = "1px solid rgba(255, 255, 255, 0.08)";
+    heroCard.style.padding = "var(--sp-6)";
+    heroCard.style.borderRadius = "var(--radius-2xl)";
+    heroCard.style.display = "flex";
+    heroCard.style.alignContent = "center";
+    heroCard.style.gap = "var(--sp-6)";
+    heroCard.style.cursor = "pointer";
+    heroCard.style.transition = "transform 0.2s ease, opacity 0.3s ease";
+    heroCard.style.willChange = "transform, opacity";
 
     heroCard.innerHTML = `
       <div style="width: 100px; height: 100px; display: flex; align-items: center; justify-content: center; background: var(--bg-card); border-radius: var(--radius-lg); overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.5);">

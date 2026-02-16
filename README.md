@@ -11,21 +11,22 @@ Flow is a premium, high-performance music player built with Capacitor and Vite. 
   - **Swipe Gestures**: Swipe down to close the Now Playing screen.
 - **Advanced Audio Engine**:
   - Gapless playback and crossfading (0-12s).
+  - **4-Mode Playback**: Cycle through Play Once ⏹️, Play to End 🏁, Repeat All 🔁, and Repeat One 🔂.
   - 5-band parametric equalizer with makeup gain.
   - Mono audio downmixing and "Avoid Short Tracks" filtering.
 - **Queue & Library**:
+  - **Circular Queue View**: Infinite scrolling/looping "Up Next" list when Repeat All is active.
+  - **Mode Transparency**: Real-time status bar and Shuffle/Repeat toggles directly in the Queue.
+  - **Visual "Play Once"**: Dimmed queue states and "STOP" badges for clear playback feedback.
   - **Drag & Drop Reordering**: Natural touch-based reordering in the queue.
   - **Play Next**: Context menu option to jump tracks to the top of the queue.
   - Blazing fast local scanning with metadata editing.
-  - Artist and Album automatic grouping.
-- **Now Playing**:
-  - Dynamic background colors based on album art.
-  - Real-time progress and seek controls.
-  - Tactile haptic feedback on all major interactions.
-- **Customization**:
-  - Custom background images (Gallery pick).
-  - Multiple accent color presets.
-  - Adjustable sleep timer with real-time countdown.
+- **Premium UI & UX**:
+  - Modern glassmorphism design with dynamic accent colors.
+  - **Hardware Accelerated Blur**: Zero-jump blur transitions for premium glass feel.
+  - **Layout Stability**: `scrollbar-gutter: stable` prevents content shifting.
+  - **Restored Visualizers**: Eq-bars animation in the library for currently playing tracks.
+  - **Smooth Page Transitions**: Slide and fade animations for a seamless feel.
 
 ## 🚀 Getting Started
 

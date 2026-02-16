@@ -21,8 +21,9 @@ class AudioEngine {
     this.currentTime = 0;
     this.duration = 0;
     this.volume = 1;
-    this.repeatMode = "all";
+    this.repeatMode = "off";
     this.shuffleMode = false;
+    this.stopAfterCurrent = false;
 
     this.crossfadeDuration =
       parseFloat(localStorage.getItem("flow_crossfade")) || 1.5;
@@ -39,7 +40,6 @@ class AudioEngine {
       localStorage.getItem("flow_avoid_short") !== "false";
     this.minTrackDuration =
       parseInt(localStorage.getItem("flow_min_duration")) || 30;
-    this.monoMode = localStorage.getItem("flow_mono_mode") === "true";
 
     this.consecutiveErrorCount = 0;
     this._transitionedFrom = null;
@@ -49,127 +49,13 @@ class AudioEngine {
 
     this._listeners = {};
 
-    this.audioCtx = null;
-    this.eqFilters = null;
-    this.masterGain = null;
-    this.volumeGain = null;
-    this._eqInitialized = false;
-
     this._setupAudioEvents(this.audioA);
     this._setupAudioEvents(this.audioB);
     this._setupMediaSession();
     this._setupNativeListener();
-
-    const resumeOnInteraction = () => {
-      if (this.audioCtx && this.audioCtx.state === "suspended") {
-        this.audioCtx.resume();
-      }
-      window.removeEventListener("touchstart", resumeOnInteraction);
-      window.removeEventListener("mousedown", resumeOnInteraction);
-    };
-    window.addEventListener("touchstart", resumeOnInteraction);
-    window.addEventListener("mousedown", resumeOnInteraction);
-
-    setTimeout(() => {
-      this._loadEQSettings();
-      if (this.monoMode) this.setMonoMode(true);
-    }, 100);
-  }
-
-  _loadEQSettings() {
-    const saved = localStorage.getItem("flow_eq_gains");
-    if (saved) {
-      try {
-        const gains = JSON.parse(saved);
-        if (Array.isArray(gains)) {
-          gains.forEach((g, i) => this.setEQGain(i, g));
-        }
-      } catch (e) {}
-    }
-  }
-
-  _ensureAudioContext() {
-    if (this._eqInitialized) return;
-    this._eqInitialized = true;
-
-    try {
-      this.audioCtx = new (window.AudioContext || window.webkitAudioContext)({
-        sampleRate: 48000,
-      });
-
-      this.volumeGain = this.audioCtx.createGain();
-      this.volumeGain.gain.value = this.volume;
-
-      this.masterGain = this.audioCtx.createGain();
-      this.masterGain.gain.value = 3.0;
-      this.masterGain.connect(this.audioCtx.destination);
-      this.volumeGain.connect(this.masterGain);
-
-      const frequencies = [60, 230, 910, 3600, 14000];
-      this.eqFilters = frequencies.map((freq) => {
-        const filter = this.audioCtx.createBiquadFilter();
-        filter.type = "peaking";
-        filter.frequency.value = freq;
-        filter.Q.value = 1;
-        filter.gain.value = 0;
-        return filter;
-      });
-
-      this.eqFilters.reduce((prev, next) => {
-        prev.connect(next);
-        return next;
-      });
-      this.eqFilters[this.eqFilters.length - 1].connect(this.volumeGain);
-
-      this.sourceA = this.audioCtx.createMediaElementSource(this.audioA);
-      this.sourceB = this.audioCtx.createMediaElementSource(this.audioB);
-      this.sourceA.connect(this.eqFilters[0]);
-      this.sourceB.connect(this.eqFilters[0]);
-
-      if (this.audioCtx.state === "suspended") {
-        this.audioCtx.resume().catch(() => {});
-      }
-
-      console.log(
-        "Web Audio EQ initialized at",
-        this.audioCtx.sampleRate,
-        "Hz",
-      );
-    } catch (e) {
-      console.warn("Web Audio API not supported:", e);
-      this._eqInitialized = false;
-    }
-  }
-
-  setEQGain(index, gain) {
-    this._ensureAudioContext();
-    if (this.eqFilters && this.eqFilters[index]) {
-      this.eqFilters[index].gain.setTargetAtTime(
-        gain,
-        this.audioCtx.currentTime,
-        0.05,
-      );
-      const gains = this.getEQGains();
-      localStorage.setItem("flow_eq_gains", JSON.stringify(gains));
-    }
-  }
-
-  getEQGains() {
-    return this.eqFilters
-      ? this.eqFilters.map((f) => f.gain.value)
-      : [0, 0, 0, 0, 0];
   }
 
   _setupAudioEvents(player) {
-    const resumeCtx = () => {
-      if (this.audioCtx && this.audioCtx.state === "suspended") {
-        this.audioCtx.resume();
-      }
-    };
-    document.addEventListener("click", resumeCtx);
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") resumeCtx();
-    });
     player.addEventListener("timeupdate", () => {
       if (player !== this.activePlayer || this._changingTrack) return;
 
@@ -407,11 +293,7 @@ class AudioEngine {
 
     this.activePlayer.pause();
     this.activePlayer.src = track.src;
-    this.activePlayer.volume = this._eqInitialized ? 1.0 : this.volume;
-
-    if (this.audioCtx && this.audioCtx.state === "suspended") {
-      this.audioCtx.resume().catch(() => {});
-    }
+    this.activePlayer.volume = this.volume;
 
     setTimeout(() => {
       if (this._currentTransitionId !== transitionId) {
@@ -550,9 +432,6 @@ class AudioEngine {
 
   resume() {
     if (this.currentTrack) {
-      if (this.audioCtx && this.audioCtx.state === "suspended") {
-        this.audioCtx.resume().catch(() => {});
-      }
       this.activePlayer.play().catch(() => {});
       if ("mediaSession" in navigator)
         navigator.mediaSession.playbackState = "playing";
@@ -579,14 +458,7 @@ class AudioEngine {
 
   setVolume(level) {
     this.volume = Math.max(0, Math.min(1, level));
-    if (this._eqInitialized && this.volumeGain) {
-      this.volumeGain.gain.setTargetAtTime(
-        this.volume,
-        this.audioCtx.currentTime,
-        0.02,
-      );
-      this.activePlayer.volume = 1.0;
-    } else if (!this.isCrossfading) {
+    if (!this.isCrossfading) {
       this.activePlayer.volume = this.volume;
     }
     this._emit("volumechange", { volume: this.volume });
@@ -630,15 +502,51 @@ class AudioEngine {
   }
 
   toggleRepeat() {
-    const modes = ["off", "all", "one"];
-    const idx = modes.indexOf(this.repeatMode);
-    this.repeatMode = modes[(idx + 1) % modes.length];
-    this._emit("repeatchange", { mode: this.repeatMode });
+    // Modes:
+    // 1. off + stopAfterCurrent = Play Once
+    // 2. off + !stopAfterCurrent = Play to End (Default)
+    // 3. all = Repeat All
+    // 4. one = Repeat One
+
+    if (this.repeatMode === "off" && this.stopAfterCurrent) {
+      // From Play Once -> Play to End
+      this.repeatMode = "off";
+      this.stopAfterCurrent = false;
+    } else if (this.repeatMode === "off" && !this.stopAfterCurrent) {
+      // From Play to End -> Repeat All
+      this.repeatMode = "all";
+      this.stopAfterCurrent = false;
+    } else if (this.repeatMode === "all") {
+      // From Repeat All -> Repeat One
+      this.repeatMode = "one";
+      this.stopAfterCurrent = false;
+    } else {
+      // From Repeat One -> Play Once
+      this.repeatMode = "off";
+      this.stopAfterCurrent = true;
+    }
+
+    if (this.repeatMode !== "off" || this.stopAfterCurrent) {
+      this.shuffleMode = false;
+      this._emit("shufflechange", { enabled: false });
+    }
+
+    this._emit("repeatchange", {
+      mode: this.repeatMode,
+      stopAfterCurrent: this.stopAfterCurrent,
+    });
     return this.repeatMode;
   }
 
   toggleShuffle() {
     this.shuffleMode = !this.shuffleMode;
+
+    if (this.shuffleMode) {
+      this.repeatMode = "off";
+      this.stopAfterCurrent = false;
+      this._emit("repeatchange", { mode: "off", stopAfterCurrent: false });
+    }
+
     this._emit("shufflechange", { enabled: this.shuffleMode });
     return this.shuffleMode;
   }
@@ -671,25 +579,22 @@ class AudioEngine {
     this._emit("library_filter_change");
   }
 
-  setMonoMode(enabled) {
-    this.monoMode = enabled;
-    localStorage.setItem("flow_mono_mode", enabled.toString());
+  setAccentColor(color) {
+    this.accentColor = color;
+    localStorage.setItem("flow_accent_color", color);
 
-    if (enabled) {
-      this._ensureAudioContext();
-    }
+    document.documentElement.style.setProperty("--accent", color);
+    document.documentElement.style.setProperty("--accent-hover", color);
 
-    if (this.audioCtx) {
-      if (enabled) {
-        this.audioCtx.destination.channelCount = 1;
-        this.audioCtx.destination.channelCountMode = "explicit";
-        this.audioCtx.destination.channelInterpretation = "speakers";
-      } else {
-        this.audioCtx.destination.channelCount = 2;
-        this.audioCtx.destination.channelCountMode = "max";
-        this.audioCtx.destination.channelInterpretation = "speakers";
-      }
-    }
+    const hexToRgb = (hex) => {
+      var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+      return result
+        ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
+        : "29, 185, 84";
+    };
+    document.documentElement.style.setProperty("--accent-rgb", hexToRgb(color));
+
+    this._emit("accentchange", { color });
   }
 
   _handleTrackEnd() {
@@ -763,7 +668,18 @@ class AudioEngine {
       } else if (action.startsWith("seekTo:")) {
         const posMs = parseInt(action.split(":")[1], 10);
         if (!isNaN(posMs)) {
-          this.seek(posMs / 1000); // Convert ms to seconds
+          this.seek(posMs / 1000);
+        }
+      }
+      if (action === "headsetDisconnected") {
+        if (this.pauseOnDisconnect) {
+          this.pause();
+          store.showToast("Headphones disconnected 🎧");
+        }
+      } else if (action === "headsetConnected") {
+        if (this.playOnConnect && this.currentTrack) {
+          this.resume();
+          store.showToast("Headphones connected! 🎵");
         }
       }
     });

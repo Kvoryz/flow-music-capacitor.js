@@ -82,10 +82,6 @@ function showContextMenu(wrapper, track, hideContextMenu) {
         <svg viewBox="0 0 24 24" fill="currentColor" style="width:22px;height:22px;"><path d="M6 6h12v12H6z"/></svg>
         <span>Stop after current track</span>
       </button>
-      <button class="context-menu-item" data-action="eq">
-        <svg viewBox="0 0 24 24" fill="currentColor" style="width:22px;height:22px;"><path d="M10 20h4V4h-4v16zm-6 0h4v-8H4v8zM16 9v11h4V9h-4z"/></svg>
-        <span>Equalizer</span>
-      </button>
       <button class="context-menu-item" data-action="edit">
         <svg viewBox="0 0 24 24" fill="currentColor" style="width:22px;height:22px;"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
         <span>Edit track info</span>
@@ -128,8 +124,7 @@ function showContextMenu(wrapper, track, hideContextMenu) {
   wrapper
     .querySelector('[data-action="add-playlist"]')
     .addEventListener("click", () => {
-      store.set("contextMenu", null);
-      showAddToPlaylistMenu(wrapper, track);
+      showAddToPlaylistMenu(wrapper, track, hideContextMenu);
     });
 
   wrapper
@@ -151,13 +146,13 @@ function showContextMenu(wrapper, track, hideContextMenu) {
   wrapper
     .querySelector('[data-action="sleep-timer"]')
     .addEventListener("click", () => {
-      showSleepTimerMenu(wrapper);
+      showSleepTimerMenu(wrapper, hideContextMenu);
     });
 
   wrapper
     .querySelector('[data-action="crossfade"]')
     .addEventListener("click", () => {
-      showCrossfadeMenu(wrapper);
+      showCrossfadeMenu(wrapper, hideContextMenu);
     });
 
   wrapper
@@ -171,11 +166,6 @@ function showContextMenu(wrapper, track, hideContextMenu) {
       );
       store.set("contextMenu", null);
     });
-
-  wrapper.querySelector('[data-action="eq"]').addEventListener("click", () => {
-    store.set("eqOpen", true);
-    store.set("contextMenu", null);
-  });
 
   wrapper
     .querySelector('[data-action="edit"]')
@@ -193,7 +183,7 @@ function showContextMenu(wrapper, track, hideContextMenu) {
     });
 }
 
-async function showCrossfadeMenu(wrapper) {
+async function showCrossfadeMenu(wrapper, hideContextMenu) {
   wrapper.style.display = "block";
   wrapper.innerHTML = `
     <div class="context-menu-overlay"></div>
@@ -213,7 +203,7 @@ async function showCrossfadeMenu(wrapper) {
   wrapper
     .querySelector(".context-menu-overlay")
     .addEventListener("click", () => {
-      store.set("contextMenu", null);
+      hideContextMenu();
     });
 
   wrapper.querySelectorAll("[data-fade]").forEach((btn) => {
@@ -225,12 +215,12 @@ async function showCrossfadeMenu(wrapper) {
           ? `Crossfade set to ${secs}s`
           : "Crossfade turned off (Gapless enabled)",
       );
-      store.set("contextMenu", null);
+      hideContextMenu();
     });
   });
 }
 
-async function showSleepTimerMenu(wrapper) {
+async function showSleepTimerMenu(wrapper, hideContextMenu) {
   wrapper.style.display = "block";
   wrapper.innerHTML = `
     <div class="context-menu-overlay"></div>
@@ -253,7 +243,7 @@ async function showSleepTimerMenu(wrapper) {
   wrapper
     .querySelector(".context-menu-overlay")
     .addEventListener("click", () => {
-      store.set("contextMenu", null);
+      hideContextMenu();
     });
 
   wrapper.querySelectorAll("[data-timer]").forEach((btn) => {
@@ -265,12 +255,12 @@ async function showSleepTimerMenu(wrapper) {
       } else {
         store.showToast("Sleep timer turned off");
       }
-      store.set("contextMenu", null);
+      hideContextMenu();
     });
   });
 }
 
-function showAddToPlaylistMenu(wrapper, track) {
+function showAddToPlaylistMenu(wrapper, track, hideContextMenu) {
   const playlists = musicLibrary.getPlaylists();
 
   wrapper.style.display = "block";
